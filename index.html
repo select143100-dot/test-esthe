@@ -2503,7 +2503,9 @@ function renderAccounts(){
   const accs = ld('accounts',[]);
   const rl={dev:'製作者',admin:'管理者',staff:'内勤'};
   const rc={dev:'rb-dev',admin:'rb-admin',staff:'rb-staff'};
-  const visible = isDev() ? accs : accs.filter(a=>a.role!=='dev');
+  const roleOrder={dev:0,admin:1,staff:2};
+  const visible = (isDev() ? accs : accs.filter(a=>a.role!=='dev'))
+    .slice().sort((a,b)=>(roleOrder[a.role]??9)-(roleOrder[b.role]??9));
   document.getElementById('accList').innerHTML = visible.map(a=>`
     <div class="mgr-item">
       <div style="flex:1">
