@@ -1630,8 +1630,8 @@ function bkCardHTML(bk){
       <div style="display:flex;gap:5px;align-items:center">
         ${cancelled
           ? `<span class="bk-tag" style="background:#2D1010;color:#C85A5A">キャンセル</span>
-             <button class="btn btn-o btn-sm" onclick="restoreBk(${bk.id})" style="font-size:11px;padding:3px 8px">再予約</button>`
-          : `<button class="btn btn-o btn-sm" onclick="openEditBk(${bk.id})" style="font-size:11px;padding:3px 8px">編集</button>`
+             <button class="btn btn-o btn-sm" onclick="restoreBk('${bk.id}')" style="font-size:11px;padding:3px 8px">再予約</button>`
+          : `<button class="btn btn-o btn-sm" onclick="openEditBk('${bk.id}')" style="font-size:11px;padding:3px 8px">編集</button>`
         }
       </div>
     </div>
