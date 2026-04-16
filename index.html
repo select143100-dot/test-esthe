@@ -387,10 +387,11 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
 
     <!-- THERAPIST LIST -->
     <div class="page hidden" id="page-therapist">
-      <div class="rb" style="margin-bottom:14px">
+      <div class="rb" style="margin-bottom:10px">
         <span class="sec" style="margin:0">セラピスト一覧</span>
         <button class="btn btn-g btn-sm" onclick="openM('newTh')">＋ 追加</button>
       </div>
+      <input class="inp-sm" id="thSearch" placeholder="名前で絞り込み..." oninput="renderTherapists()" style="width:100%;margin-bottom:12px">
       <div id="thList"></div>
     </div>
 
@@ -1413,7 +1414,8 @@ async function saveAtt(){
 // ── THERAPISTS ──
 function renderTherapists(){
   const att=ld('attendance',[]);
-  const therapists=ld('therapists',[]);
+  const query=(document.getElementById('thSearch')?.value||'').trim();
+  const therapists=ld('therapists',[]).filter(t=>!query||t.name.includes(query));
   document.getElementById('thList').innerHTML=therapists.map(t=>{
     const a=att.find(x=>x.therapistId===t.id);
     const areaName=a?.areaId?ld('areas',[]).find(ar=>ar.id===a.areaId)?.name||'':'';
