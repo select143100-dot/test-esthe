@@ -536,7 +536,7 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
     <div class="page hidden" id="page-accounts">
       <div class="rb" style="margin-bottom:14px">
         <span class="sec" style="margin:0">アカウント管理</span>
-        <button class="btn btn-g btn-sm" onclick="openM('newAcc')">＋ 追加</button>
+        <button class="btn btn-g btn-sm" onclick="document.getElementById('acc-id').value='';openM('newAcc')">＋ 追加</button>
       </div>
       <div id="accList"></div>
     </div>
@@ -1521,10 +1521,13 @@ function openM(name){
   document.getElementById('m-'+name).classList.remove('hidden');
   if(name==='att')openAtt();
   if(name==='newAcc'){
-    document.getElementById('accModalTitle').textContent='アカウント追加';
-    document.getElementById('acc-id').value='';
-    ['acc-display','acc-username','acc-pass'].forEach(i=>document.getElementById(i).value='');
-    document.getElementById('acc-role').value='staff';
+    // acc-idが既にセットされている場合（openEditAccから）はリセットしない
+    const existingId = document.getElementById('acc-id').value;
+    if(!existingId){
+      document.getElementById('accModalTitle').textContent='アカウント追加';
+      ['acc-display','acc-username','acc-pass'].forEach(i=>document.getElementById(i).value='');
+      document.getElementById('acc-role').value='staff';
+    }
   }
   if(name==='sold'){}
   if(name==='newArea'){
