@@ -254,6 +254,10 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
     <input class="inp" id="l-user" placeholder="username" autocomplete="off">
     <label class="lbl">パスワード</label>
     <input class="inp" type="password" id="l-pass" placeholder="password" onkeydown="if(event.key==='Enter')doLogin()">
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <input type="checkbox" id="l-remember" style="width:16px;height:16px;accent-color:var(--gold);cursor:pointer">
+      <label for="l-remember" style="font-size:13px;color:var(--ts);cursor:pointer">ログイン状態を保存する</label>
+    </div>
     <button class="btn btn-g btn-w" onclick="doLogin()">ログイン</button>
     <div id="l-err" style="color:#c06060;font-size:13px;margin-top:10px;text-align:center"></div>
   </div>
@@ -828,10 +832,18 @@ async function initData(){
     document.getElementById('screen-setup').classList.remove('hidden');
     return;
   }
+  // セッション復元
+  const session = localStorage.getItem('luxe_session');
+  if(session){
+    try{
+      const {id} = JSON.parse(session);
+      const acc = cache.get('accounts',[]).find(a=>a.id===id);
+      if(acc){ CUR=acc; _loginSuccess(); return; }
+    } catch(e){}
+    localStorage.removeItem('luxe_session');
+  }
   document.getElementById('screen-login').classList.remove('hidden');
 }
-
-// ── SETUP WIZARD ──
 let _setupStep = 0;
 
 function setupNext(step){
@@ -917,25 +929,33 @@ function fp(n){return '¥'+Number(n).toLocaleString();}
 // ── AUTH ──
 async function doLogin(){
   if(OFFLINE){
-    // オフライン時はキャッシュで認証
     const u=document.getElementById('l-user').value.trim();
     const p=document.getElementById('l-pass').value;
     const acc=cache.get('accounts',[]).find(a=>a.username===u&&a.password===p);
     if(!acc){document.getElementById('l-err').textContent='ユーザー名またはパスワードが違います';return;}
     CUR=acc;
+    _saveSessionIfChecked();
     _loginSuccess();
     return;
   }
   const u=document.getElementById('l-user').value.trim();
   const p=document.getElementById('l-pass').value;
   showLoad('ログイン中...');
-  // 最新データ取得
   await fetchAll();
   hideLoad();
   const acc=cache.get('accounts',[]).find(a=>a.username===u&&a.password===p);
   if(!acc){document.getElementById('l-err').textContent='ユーザー名またはパスワードが違います';return;}
   CUR=acc;
+  _saveSessionIfChecked();
   _loginSuccess();
+}
+function _saveSessionIfChecked(){
+  const remember=document.getElementById('l-remember')?.checked;
+  if(remember){
+    localStorage.setItem('luxe_session',JSON.stringify({id:CUR.id,savedAt:Date.now()}));
+  } else {
+    localStorage.removeItem('luxe_session');
+  }
 }
 function _loginSuccess(){
   document.getElementById('screen-login').classList.add('hidden');
@@ -947,6 +967,7 @@ function _loginSuccess(){
 }
 function doLogout(){
   CUR=null;
+  localStorage.removeItem('luxe_session');
   document.getElementById('screen-main').classList.add('hidden');
   document.getElementById('screen-main').style.display='none';
   document.getElementById('screen-login').classList.remove('hidden');
