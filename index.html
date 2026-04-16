@@ -555,8 +555,12 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
     <div class="mt" id="menuItemTitle">項目追加</div>
     <input type="hidden" id="mi-type">
     <input type="hidden" id="mi-idx">
-    <label class="lbl" id="mi-label1">名称・分数</label>
+    <label class="lbl">名称</label>
     <input class="inp" id="mi-label" placeholder="例: 60分">
+    <div id="mi-mins-wrap">
+      <label class="lbl">分数</label>
+      <input type="number" class="inp" id="mi-mins" placeholder="例: 60">
+    </div>
     <label class="lbl">料金（円）</label>
     <input type="number" class="inp" id="mi-price" placeholder="15000">
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">
@@ -2064,16 +2068,20 @@ function renderMgrList(type, items){
 function openMenuItemModal(type, itemId){
   const cfg = MENU_TYPES[type];
   if(!cfg)return;
+  const hasMins = (type==='course'||type==='ext');
   document.getElementById('mi-type').value = type;
   document.getElementById('mi-idx').value = itemId !== undefined ? itemId : '';
   document.getElementById('menuItemTitle').textContent = itemId !== undefined ? cfg.label+'を編集' : cfg.label+'を追加';
   document.getElementById('mi-label').placeholder = cfg.placeholder;
+  document.getElementById('mi-mins-wrap').style.display = hasMins ? '' : 'none';
   if(itemId !== undefined){
     const item = ld(cfg.key,[]).find(x=>String(x.id)===String(itemId));
     document.getElementById('mi-label').value = item?.label||'';
+    document.getElementById('mi-mins').value = item?.mins||'';
     document.getElementById('mi-price').value = item?.price||'';
   } else {
     document.getElementById('mi-label').value = '';
+    document.getElementById('mi-mins').value = '';
     document.getElementById('mi-price').value = '';
   }
   openM('menuItem');
@@ -2085,14 +2093,18 @@ async function saveMenuItem(){
   const itemId = document.getElementById('mi-idx').value;
   const label = document.getElementById('mi-label').value.trim();
   const price = parseInt(document.getElementById('mi-price').value)||0;
+  const hasMins = (type==='course'||type==='ext');
+  const mins = hasMins ? parseInt(document.getElementById('mi-mins').value)||0 : null;
   if(!label){alert('名称を入力してください');return;}
+  if(hasMins && !mins){alert('分数を入力してください');return;}
   const cfg = MENU_TYPES[type];
   if(!cfg)return;
+  const row = hasMins ? {label, mins, price} : {label, price};
   showLoad('保存中...');
   if(!itemId){
-    await sb.from(cfg.tbl).insert([{label, price}]);
+    await sb.from(cfg.tbl).insert([row]);
   } else {
-    await sb.from(cfg.tbl).update({label, price}).eq('id', itemId);
+    await sb.from(cfg.tbl).update(row).eq('id', itemId);
   }
   await fetchAll();
   hideLoad();
