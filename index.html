@@ -1237,6 +1237,14 @@ function padName(text, width){
   return text+'　'.repeat(padCount);
 }
 
+// SNS表示用: 24時以上は-24して0:xx表記に変換
+function minsToSnsDisplay(mins){
+  if(mins >= 24*60) mins -= 24*60;
+  const h = Math.floor(mins/60);
+  const m = mins % 60;
+  return `${h}:${String(m).padStart(2,'0')}`;
+}
+
 function spCalc(){
   const raw=document.getElementById('spTime')?.value||'';
   const base=parseSpTime(raw);
@@ -1275,7 +1283,7 @@ function spCalc(){
 
   // 受付可能（完売でない）
   const activeLines = cands.filter(c=>c.mx>0&&!soldOut[c.id]).map(c=>{
-    return padName(sanName(c.name),6)+minsToDisplay(c.start)+'～';
+    return padName(sanName(c.name),6)+minsToSnsDisplay(c.start)+'～';
   });
   // 完売セラピスト（出勤中で完売設定あり）
   const att = ld('attendance',[]);
