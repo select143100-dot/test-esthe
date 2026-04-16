@@ -1432,7 +1432,7 @@ function renderTherapists(){
         </div>
         <div class="row" style="gap:6px">
           <button class="btn btn-o btn-sm" onclick="openEditTh(${t.id})">編集</button>
-          <button class="btn btn-d btn-sm" onclick="deleteTh(${t.id})">削除</button>
+          ${isAdmin()?`<button class="btn btn-d btn-sm" onclick="deleteTh(${t.id})">削除</button>`:''}
         </div>
       </div>
       ${tags?`<div class="prof-wrap">${tags}</div>`:''}
