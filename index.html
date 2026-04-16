@@ -2194,7 +2194,7 @@ function renderSales(){
     '（'+'日月火水木金土'[dObj.getDay()]+'）';
 
   // 当日予約データ
-  const bks = ld('bookings',[]).filter(b=>b.date===selDate);
+  const bks = ld('bookings',[]).filter(b=>b.date===selDate && b.status!=='cancel');
 
   // KPI
   const totalSales = bks.reduce((s,b)=>s+(b.total||0),0);
