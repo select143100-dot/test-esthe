@@ -1970,7 +1970,9 @@ function openNewBk(){
   rebuildDiscButtons();
   rebuildAttrNomButtons();
   // 生成後にリセット・初期値セット
-  ['course','attr','nom','op'].forEach(g=>segReset(g));
+  ['course','attr','nom'].forEach(g=>segReset(g));
+  segReset('op');
+  segSet('op','有');
   segSet('ext','0');
   resetExtMore();
   setPayment('現金');
