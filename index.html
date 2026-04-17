@@ -365,13 +365,29 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
           <button class="sp-copy" onclick="spCopy()">コピー</button>
         </div>
       </div>
-      <button class="btn btn-o btn-sm" onclick="openM('att')" style="margin-top:8px;width:100%">出勤登録</button>
 
-      <!-- 受付停止パネル -->
-      <div style="margin-top:12px">
-        <div style="font-size:12px;font-weight:500;color:var(--ts);margin-bottom:7px;letter-spacing:.4px">受付停止</div>
-        <div id="pauseList"></div>
+      <!-- 出勤登録 アコーディオン -->
+      <div class="accord-wrap" style="margin-top:10px">
+        <div class="accord-hdr" onclick="toggleAccord('accord-att')">
+          <span>出勤登録</span>
+          <span class="accord-arrow" id="accord-att-arrow">▶</span>
+        </div>
+        <div class="accord-body hidden" id="accord-att">
+          <button class="btn btn-g btn-sm" onclick="openM('att')" style="width:100%;margin-bottom:4px">＋ 登録・編集</button>
+        </div>
       </div>
+
+      <!-- 受付停止 アコーディオン -->
+      <div class="accord-wrap" style="margin-top:6px">
+        <div class="accord-hdr" onclick="toggleAccord('accord-pause')">
+          <span>受付停止</span>
+          <span class="accord-arrow" id="accord-pause-arrow">▶</span>
+        </div>
+        <div class="accord-body hidden" id="accord-pause">
+          <div id="pauseList"></div>
+        </div>
+      </div>
+
     </div>
 
     <!-- BOOKING PAGE -->
@@ -2879,14 +2895,4 @@ initData();
     </div>
 
     <div style="margin-bottom:8px">
-      <button onclick="toggleMemo()" style="background:none;border:none;color:var(--ts);font-size:12px;cursor:pointer;padding:0" id="memo-toggle-btn">▶ メモ</button>
-      <textarea class="bk-inp hidden" id="bk-memo" rows="2" placeholder="備考" style="resize:none;margin-top:4px;width:100%"></textarea>
-    </div>
-
-    <button id="bk-del-btn" class="btn btn-d hidden" style="width:100%;padding:10px;font-size:14px;margin-bottom:6px" onclick="deleteBk()">この予約をキャンセル</button>
-    <button class="btn btn-g" style="width:100%;padding:10px;font-size:14px" onclick="saveBk()">保存</button>
-  
-  </div>
-</div>
-</body>
-</html>
+      <button onclick="toggleMemo()" style="background:none;border:none;color:var(-
