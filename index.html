@@ -1852,13 +1852,18 @@ function updateTherapistSelect(){
   let available;
   if(date === bizToday){
     const presentIds = new Set(att.map(a=>a.therapistId));
-    // 出勤者に絞る
     const present = therapists.filter(t=>presentIds.has(t.id));
-    // 現在時刻で受付不可（mx<=0）のセラピストを除外
-    const nowMins = nowBusinessMins();
-    const cands = computeShortest(nowMins);
-    const unavailableIds = new Set(cands.filter(c=>c.mx<=0).map(c=>c.id));
-    available = present.filter(t=>!unavailableIds.has(t.id));
+    const isEdit = !!document.getElementById('bk-id').value;
+    if(isEdit){
+      // 編集時は出勤者全員選択可
+      available = present;
+    } else {
+      // 新規時は受付不可を除外
+      const nowMins = nowBusinessMins();
+      const cands = computeShortest(nowMins);
+      const unavailableIds = new Set(cands.filter(c=>c.mx<=0).map(c=>c.id));
+      available = present.filter(t=>!unavailableIds.has(t.id));
+    }
   } else {
     available = therapists;
   }
