@@ -1387,20 +1387,18 @@ function parseTI(raw){
 }
 
 function openAtt(){
-  // 当日の出勤データを読み込んでカードを復元
   const att = ld('attendance',[]);
   attSelected = {};
   att.forEach(a=>{
-    attSelected[a.therapistId] = {start:a.start, end:a.end, areaId:a.areaId||null, areaName:a.areaName||''};
+    attSelected[String(a.therapistId)] = {start:a.start, end:a.end, areaId:a.areaId||null};
   });
   document.getElementById('attSearch').value='';
   document.getElementById('attSuggest').style.display='none';
   renderAttCards();
 }
 
-
 function clearAR(id){
-  delete attSelected[id];
+  delete attSelected[String(id)];
   renderAttCards();
 }
 
@@ -1426,8 +1424,13 @@ async function saveAtt(){
     rows.push({therapist_id:tid, date:today, start, end, area_id:areaId});
   }
   showLoad('出勤登録中...');
-  // 当日分を一旦削除して再挿入
-  await sb.from('attendance').delete().eq('date', today);
+  // 当日分を全件削除して再挿入
+  const {error:delErr} = await sb.from('attendance').delete().eq('date', today);
+  if(delErr){
+    // dateでの削除が失敗した場合はin句で削除
+    const allTids = therapists.map(t=>t.id);
+    await sb.from('attendance').delete().in('therapist_id', allTids).eq('date', today);
+  }
   if(rows.length) await sb.from('attendance').insert(rows);
   await fetchAll();
   hideLoad();
@@ -1682,11 +1685,16 @@ function updateTherapistSelect(){
   const att = ld('attendance',[]);
   const therapists = ld('therapists',[]);
 
-  // 営業日（今日）のみ出勤者に絞る、それ以外は全員表示
   let available;
   if(date === bizToday){
     const presentIds = new Set(att.map(a=>a.therapistId));
-    available = therapists.filter(t=>presentIds.has(t.id));
+    // 出勤者に絞る
+    const present = therapists.filter(t=>presentIds.has(t.id));
+    // 現在時刻で受付不可（mx<=0）のセラピストを除外
+    const nowMins = nowBusinessMins();
+    const cands = computeShortest(nowMins);
+    const unavailableIds = new Set(cands.filter(c=>c.mx<=0).map(c=>c.id));
+    available = present.filter(t=>!unavailableIds.has(t.id));
   } else {
     available = therapists;
   }
@@ -1696,7 +1704,6 @@ function updateTherapistSelect(){
   sel.innerHTML = '<option value="">-- 選択 --</option>'
     + available.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
 
-  // 既存選択値が引き続き有効なら保持
   if(currentVal && available.find(t=>String(t.id)===String(currentVal))){
     sel.value = currentVal;
   }
@@ -2348,8 +2355,8 @@ function renderAttSearch(){
 }
 
 function attAdd(therapistId){
-  if(attSelected[therapistId])return;
-  attSelected[therapistId] = {start:'', end:'', areaId:null, areaName:''};
+  if(attSelected[String(therapistId)])return;
+  attSelected[String(therapistId)] = {start:'', end:'', areaId:null};
   document.getElementById('attSearch').value='';
   document.getElementById('attSuggest').style.display='none';
   renderAttCards();
@@ -2375,7 +2382,7 @@ function renderAttCards(){
     const tid = parseInt(idStr);
     const t = therapists.find(x=>x.id===tid);
     const name = t ? t.name : '不明';
-    const d = attSelected[tid];
+    const d = attSelected[String(tid)];
     return `<div style="background:var(--dark3);border-radius:var(--r);padding:9px 11px;margin-bottom:7px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px">
         <span style="font-size:13px;font-weight:500;color:var(--tp)">${name}</span>
@@ -2404,7 +2411,7 @@ function renderAttCards(){
   // エリア値を復元
   ids.forEach(idStr=>{
     const tid = parseInt(idStr);
-    const d = attSelected[tid];
+    const d = attSelected[String(tid)];
     const sel = document.getElementById('aa-'+tid);
     if(sel && d.areaId) sel.value = String(d.areaId);
   });
