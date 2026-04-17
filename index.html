@@ -368,12 +368,20 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
 
       <!-- 出勤登録 アコーディオン -->
       <div class="accord-wrap" style="margin-top:10px">
-        <div class="accord-hdr" onclick="toggleAccord('accord-att')">
+        <div class="accord-hdr" onclick="toggleAttAccord()">
           <span>出勤登録</span>
           <span class="accord-arrow" id="accord-att-arrow">▶</span>
         </div>
         <div class="accord-body hidden" id="accord-att">
-          <button class="btn btn-g btn-sm" onclick="openM('att')" style="width:100%;margin-bottom:4px">＋ 登録・編集</button>
+          <!-- 検索・追加 -->
+          <div style="position:relative;margin-bottom:10px">
+            <input class="inp" id="attSearch" placeholder="セラピスト名で検索して追加..." oninput="renderAttSearch()" autocomplete="off" style="margin-bottom:0">
+            <div id="attSuggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--dark3);border:1px solid var(--gold-d);border-radius:var(--r);z-index:10;max-height:180px;overflow-y:auto"></div>
+          </div>
+          <!-- 追加済みカード -->
+          <div id="attRows"></div>
+          <div style="font-size:11px;color:var(--tm);margin-bottom:10px" id="attCount">出勤登録: 0人</div>
+          <button class="btn btn-g" style="width:100%" onclick="saveAtt()">登録</button>
         </div>
       </div>
 
@@ -592,23 +600,6 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
     <div class="row" style="justify-content:flex-end;gap:8px;margin-top:8px">
       <button class="btn btn-o" onclick="closeM()">キャンセル</button>
       <button class="btn btn-g" onclick="saveMenuItem()">保存</button>
-    </div>
-  </div>
-
-  <!-- 出勤登録 -->
-  <div class="modal hidden" id="m-att">
-    <div class="mt">出勤登録</div>
-    <!-- 検索・追加 -->
-    <div style="position:relative;margin-bottom:10px">
-      <input class="inp" id="attSearch" placeholder="セラピスト名で検索して追加..." oninput="renderAttSearch()" autocomplete="off" style="margin-bottom:0">
-      <div id="attSuggest" style="display:none;position:absolute;top:100%;left:0;right:0;background:var(--dark3);border:1px solid var(--gold-d);border-radius:var(--r);z-index:10;max-height:180px;overflow-y:auto"></div>
-    </div>
-    <!-- 追加済みカード -->
-    <div id="attRows" style="max-height:50vh;overflow-y:auto"></div>
-    <div style="font-size:11px;color:var(--tm);margin-bottom:10px" id="attCount">出勤登録: 0人</div>
-    <div class="row" style="justify-content:flex-end;gap:8px">
-      <button class="btn btn-o" onclick="closeM()">キャンセル</button>
-      <button class="btn btn-g" onclick="saveAtt()">登録</button>
     </div>
   </div>
 
@@ -1602,9 +1593,14 @@ async function saveAtt(){
   if(rows.length) await sb.from('attendance').insert(rows);
   await fetchAll();
   hideLoad();
-  closeM();
+  // アコーディオンを閉じる
+  const body = document.getElementById('accord-att');
+  const arrow = document.getElementById('accord-att-arrow');
+  if(body) body.classList.add('hidden');
+  if(arrow) arrow.textContent = '▶';
   spCalc();
   renderTherapists();
+  renderPauseList();
 }
 
 // ── THERAPISTS ──
@@ -2595,6 +2591,16 @@ function toggleAccord(id){
   if(arrow) arrow.textContent = hidden ? '▼' : '▶';
 }
 
+function toggleAttAccord(){
+  const body = document.getElementById('accord-att');
+  const arrow = document.getElementById('accord-att-arrow');
+  if(!body)return;
+  const hidden = body.classList.contains('hidden');
+  body.classList.toggle('hidden', !hidden);
+  if(arrow) arrow.textContent = hidden ? '▼' : '▶';
+  if(hidden) openAtt();
+}
+
 // ── SNS FORMAT ──
 function loadSnsFormat(){
   const fmt = ld('snsFormat',{header:'',footer:'',sold:''});
@@ -2895,4 +2901,14 @@ initData();
     </div>
 
     <div style="margin-bottom:8px">
-      <button onclick="toggleMemo()" style="background:none;border:none;color:var(-
+      <button onclick="toggleMemo()" style="background:none;border:none;color:var(--ts);font-size:12px;cursor:pointer;padding:0" id="memo-toggle-btn">▶ メモ</button>
+      <textarea class="bk-inp hidden" id="bk-memo" rows="2" placeholder="備考" style="resize:none;margin-top:4px;width:100%"></textarea>
+    </div>
+
+    <button id="bk-del-btn" class="btn btn-d hidden" style="width:100%;padding:10px;font-size:14px;margin-bottom:6px" onclick="deleteBk()">この予約をキャンセル</button>
+    <button class="btn btn-g" style="width:100%;padding:10px;font-size:14px" onclick="saveBk()">保存</button>
+  
+  </div>
+</div>
+</body>
+</html>
