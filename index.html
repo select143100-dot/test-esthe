@@ -801,6 +801,13 @@ async function fetchAll(){
         if(s.key==='sns_header') fmt.header=s.value;
         if(s.key==='sns_footer') fmt.footer=s.value;
         if(s.key==='sns_sold') fmt.sold=s.value;
+        if(s.key==='sns_soldout'){
+          try{
+            const parsed=JSON.parse(s.value);
+            if(parsed.date===getToday()) soldOut=parsed.data||{};
+            else soldOut={};
+          } catch(e){ soldOut={}; }
+        }
       });
       cache.set('snsFormat',fmt);
     }
@@ -961,8 +968,8 @@ function _loginSuccess(){
   document.getElementById('screen-login').classList.add('hidden');
   const sm=document.getElementById('screen-main');sm.classList.remove('hidden');sm.style.display='flex';
   applyRole();
-  // 出勤データの日付チェック・古ければ自動削除
   _checkAttendanceReset();
+  _loadSoldOut();
   renderAll();
   spNow();
   showPage('dash', document.querySelector('.nb'));
@@ -1085,6 +1092,24 @@ function spResetFilter(){
 
 // ── SOLD OUT ──
 // {therapistId: true} の形で当日完売セラピストを管理
+// soldOut: Supabaseのsettingsテーブルで永続化・複数端末共有
+async function _loadSoldOut(){
+  try{
+    const {data} = await sb.from('settings').select('value').eq('key','sns_soldout').single();
+    if(!data) return;
+    const parsed = JSON.parse(data.value);
+    if(parsed.date === getToday()){
+      soldOut = parsed.data||{};
+    } else {
+      soldOut = {};
+      await sb.from('settings').delete().eq('key','sns_soldout');
+    }
+  } catch(e){ soldOut={}; }
+}
+async function _saveSoldOut(){
+  await sb.from('settings').upsert([{key:'sns_soldout', value:JSON.stringify({date:getToday(), data:soldOut})}]);
+}
+
 let soldOut = {};
 let soldOutDate = '';
 
@@ -1092,6 +1117,7 @@ function checkSoldOutReset(){
   const today = getToday();
   if(soldOutDate && soldOutDate !== today){
     soldOut={};soldOutDate='';
+    sb.from('settings').delete().eq('key','sns_soldout');
   }
 }
 
@@ -1127,6 +1153,7 @@ function openSoldModal(){
 
 function toggleThSold(id, el){
   soldOut[id] = !soldOut[id];
+  _saveSoldOut();
   const fmt = ld('snsFormat',{sold:'　完🎉'});
   const soldMark = fmt.sold||'　完🎉';
   const isSold = soldOut[id];
