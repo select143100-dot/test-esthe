@@ -1419,7 +1419,13 @@ function spCalc(){
   }
 
   tbody.innerHTML=cands.map(c=>{
-    const closed=c.mx<=0;
+    // mx<=0になったら自動完売ON
+    if(c.mx<=0 && !soldOut[c.id]){
+      soldOut[c.id] = true;
+      _saveSoldOut();
+    }
+    // 手動完売設定されていたら受付終了扱い
+    const closed = c.mx<=0 || soldOut[c.id];
     const stStr=closed?'—':minsToDisplay(c.start);
     const mxStr=closed?'本日受付終了':mxTxt(c.mx);
     if(closed){
@@ -1441,7 +1447,7 @@ function spCalc(){
   const fmt = ld('snsFormat',{header:'',footer:'',sold:'　完🎉'});
   const soldMark = fmt.sold||'　完🎉';
 
-  // 受付可能（完売でない）
+  // 受付可能（完売でない・受付終了でない）
   const activeLines = cands.filter(c=>c.mx>0&&!soldOut[c.id]).map(c=>{
     return padName(sanName(c.name),6)+minsToSnsDisplay(c.start)+'～';
   });
@@ -1858,10 +1864,10 @@ function updateTherapistSelect(){
       // 編集時は出勤者全員選択可
       available = present;
     } else {
-      // 新規時は受付不可を除外
+      // 新規時は受付不可・完売済みを除外
       const nowMins = nowBusinessMins();
       const cands = computeShortest(nowMins);
-      const unavailableIds = new Set(cands.filter(c=>c.mx<=0).map(c=>c.id));
+      const unavailableIds = new Set(cands.filter(c=>c.mx<=0||soldOut[c.id]).map(c=>c.id));
       available = present.filter(t=>!unavailableIds.has(t.id));
     }
   } else {
