@@ -961,9 +961,24 @@ function _loginSuccess(){
   document.getElementById('screen-login').classList.add('hidden');
   const sm=document.getElementById('screen-main');sm.classList.remove('hidden');sm.style.display='flex';
   applyRole();
+  // 出勤データの日付チェック・古ければ自動削除
+  _checkAttendanceReset();
   renderAll();
   spNow();
   showPage('dash', document.querySelector('.nb'));
+}
+
+async function _checkAttendanceReset(){
+  const today = getToday();
+  const att = cache.get('attendance',[]);
+  // 今日の営業日と異なる日付のデータがあれば削除
+  const stale = att.filter(a=>a.date !== today);
+  if(stale.length){
+    await sb.from('attendance').delete().neq('date', today);
+    await fetchAll();
+    spCalc();
+    renderTherapists();
+  }
 }
 function doLogout(){
   CUR=null;
@@ -1424,13 +1439,8 @@ async function saveAtt(){
     rows.push({therapist_id:tid, date:today, start, end, area_id:areaId});
   }
   showLoad('出勤登録中...');
-  // 当日分を全件削除して再挿入
-  const {error:delErr} = await sb.from('attendance').delete().eq('date', today);
-  if(delErr){
-    // dateでの削除が失敗した場合はin句で削除
-    const allTids = therapists.map(t=>t.id);
-    await sb.from('attendance').delete().in('therapist_id', allTids).eq('date', today);
-  }
+  // 全出勤データを削除して当日分を再挿入
+  await sb.from('attendance').delete().gte('id', 0);
   if(rows.length) await sb.from('attendance').insert(rows);
   await fetchAll();
   hideLoad();
