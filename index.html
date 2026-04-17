@@ -1792,7 +1792,7 @@ function renderBookingPage(){
   const filtered = bkThFilter==='all'
     ? bookings
     : bookings.filter(b=>b.therapistId===bkThFilter);
-  filtered.sort((a,b)=>a.start.localeCompare(b.start));
+  filtered.sort((a,b)=>tsToMins(a.start)-tsToMins(b.start));
 
   // バッジは営業日当日の予約数
   const todayBks = ld('bookings',[]).filter(b=>b.date===bizToday&&b.status!=='cancel');
