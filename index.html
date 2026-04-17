@@ -294,7 +294,7 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
           <span class="sp-title">最短取得</span>
           <input class="sp-tinp" id="spTime" placeholder="1000" onblur="fmtTI(this);spCalc()" onkeydown="if(event.key==='Enter'){fmtTI(this);spCalc();}">
           <button class="sp-btn" onclick="spNow()">現在時刻</button>
-          <button class="sp-btn-gold" onclick="spCalc()">再計算</button>
+          <button class="sp-btn-gold" onclick="fetchAll().then(()=>spCalc())">再計算</button>
         </div>
 
         <!-- 追加条件 -->
@@ -973,6 +973,7 @@ function _loginSuccess(){
   renderAll();
   spNow();
   showPage('dash', document.querySelector('.nb'));
+  startPolling();
 }
 
 async function _checkAttendanceReset(){
@@ -989,6 +990,7 @@ async function _checkAttendanceReset(){
 }
 function doLogout(){
   CUR=null;
+  stopPolling();
   localStorage.removeItem('luxe_session');
   document.getElementById('screen-main').classList.add('hidden');
   document.getElementById('screen-main').style.display='none';
@@ -1398,7 +1400,24 @@ function spOpenBk(therapistId, startMins, maxCourse){
   }
 }
 
-function spCopy(){
+// ── バックグラウンドポーリング（120秒ごと） ──
+let _pollTimer = null;
+function startPolling(){
+  if(_pollTimer) return;
+  _pollTimer = setInterval(async ()=>{
+    if(!CUR) return;
+    await fetchAll();
+    spCalc();
+  }, 120000);
+}
+function stopPolling(){
+  if(_pollTimer){ clearInterval(_pollTimer); _pollTimer=null; }
+}
+
+async function spCopy(){
+  // コピー前に最新データ取得
+  await fetchAll();
+  spCalc();
   const txt=document.getElementById('spSns').textContent;
   if(txt==='—')return;
   navigator.clipboard.writeText(txt).then(()=>{
