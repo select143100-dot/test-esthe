@@ -1234,12 +1234,15 @@ function computeShortest(baseMins){
     } else {
       const inProg=tBks.find(r=>r.start<=baseMins&&baseMins<r.end);
       if(inProg){
-        baseline=inProg.end+interval;
+        const afterInterval = inProg.end + interval;
+        const afterNow = baseMins + 15;
+        baseline = Math.max(afterInterval, afterNow);
       } else {
         const prev=[...tBks].filter(r=>r.end<=baseMins).sort((a,b)=>b.end-a.end)[0];
         if(prev){
-          const until=prev.end+interval;
-          baseline=baseMins<until?until:baseMins+15;
+          const afterInterval = prev.end + interval;
+          const afterNow = baseMins + 15;
+          baseline = Math.max(afterInterval, afterNow);
         } else {
           const c=baseMins+15;
           baseline=c>bEnd?bEnd:c;
