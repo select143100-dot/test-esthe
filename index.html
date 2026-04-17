@@ -366,6 +366,12 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
         </div>
       </div>
       <button class="btn btn-o btn-sm" onclick="openM('att')" style="margin-top:8px;width:100%">出勤登録</button>
+
+      <!-- 受付停止パネル -->
+      <div style="margin-top:12px">
+        <div style="font-size:12px;font-weight:500;color:var(--ts);margin-bottom:7px;letter-spacing:.4px">受付停止</div>
+        <div id="pauseList"></div>
+      </div>
     </div>
 
     <!-- BOOKING PAGE -->
@@ -970,6 +976,7 @@ function _loginSuccess(){
   applyRole();
   _checkAttendanceReset();
   _loadSoldOut();
+  _loadPauseData();
   renderAll();
   spNow();
   showPage('dash', document.querySelector('.nb'));
@@ -1028,6 +1035,69 @@ function renderDash(){
   const d=new Date();
   document.getElementById('dashDate').textContent=
     `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`;
+  renderPauseList();
+  spCalc();
+}
+
+// ── 受付停止 ──
+// {therapistId: {start:'HH:MM', end:'HH:MM'}} 当日のみ有効
+let pauseData = {};
+
+function _loadPauseData(){
+  try{
+    const raw = localStorage.getItem('luxe_pause');
+    if(!raw) return;
+    const {date, data} = JSON.parse(raw);
+    if(date === getToday()) pauseData = data||{};
+    else { pauseData={}; localStorage.removeItem('luxe_pause'); }
+  } catch(e){ pauseData={}; }
+}
+function _savePauseData(){
+  localStorage.setItem('luxe_pause', JSON.stringify({date:getToday(), data:pauseData}));
+}
+
+function renderPauseList(){
+  const att = ld('attendance',[]);
+  const therapists = ld('therapists',[]);
+  const present = therapists.filter(t=>att.find(a=>a.therapistId===t.id));
+  const wrap = document.getElementById('pauseList');
+  if(!wrap) return;
+  if(!present.length){
+    wrap.innerHTML='<div style="color:var(--tm);font-size:12px">出勤登録がありません</div>';
+    return;
+  }
+  wrap.innerHTML = present.map(t=>{
+    const p = pauseData[t.id]||{start:'',end:''};
+    return `<div style="display:grid;grid-template-columns:1fr 1fr auto;gap:6px;margin-bottom:7px;align-items:center">
+      <div>
+        <div style="font-size:10px;color:var(--tm);margin-bottom:2px">${t.name}</div>
+        <input class="inp-sm" style="width:100%;text-align:center" id="pause-s-${t.id}"
+          placeholder="1000" value="${p.start||''}"
+          onblur="fmtTI(this)" onkeydown="if(event.key==='Enter')fmtTI(this)">
+      </div>
+      <div>
+        <div style="font-size:10px;color:var(--tm);margin-bottom:2px">〜</div>
+        <input class="inp-sm" style="width:100%;text-align:center" id="pause-e-${t.id}"
+          placeholder="1200" value="${p.end||''}"
+          onblur="fmtTI(this)" onkeydown="if(event.key==='Enter')fmtTI(this)">
+      </div>
+      <button class="btn btn-o btn-sm" onclick="savePause(${t.id})" style="margin-top:14px">保存</button>
+    </div>`;
+  }).join('');
+}
+
+function savePause(tid){
+  const sEl = document.getElementById('pause-s-'+tid);
+  const eEl = document.getElementById('pause-e-'+tid);
+  fmtTI(sEl); fmtTI(eEl);
+  const start = sEl.value.trim();
+  const end = eEl.value.trim();
+  if(!start && !end){
+    delete pauseData[tid];
+  } else {
+    pauseData[tid] = {start, end};
+  }
+  _savePauseData();
   spCalc();
 }
 
@@ -1247,6 +1317,16 @@ function computeShortest(baseMins){
           const c=baseMins+15;
           baseline=c>bEnd?bEnd:c;
         }
+      }
+    }
+
+    // 受付停止チェック: 停止時間帯中なら終了時刻とbaseMins+15の遅い方をbaselineに
+    const pause = pauseData[t.id];
+    if(pause && pause.start && pause.end){
+      const pStart = tsToMins(pause.start);
+      const pEnd = tsToMins(pause.end);
+      if(baseMins >= pStart && baseMins < pEnd){
+        baseline = Math.max(pEnd, baseMins+15);
       }
     }
 
