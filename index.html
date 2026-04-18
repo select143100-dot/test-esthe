@@ -1327,13 +1327,13 @@ function computeShortest(baseMins){
       }
     }
 
-    // 受付停止チェック: 停止時間帯中なら終了時刻とbaseMins+15の遅い方をbaselineに
+    // 受付停止チェック: baselineが停止時間帯にかかっていたら終了時刻に押し出す
     const pause = pauseData[t.id];
     if(pause && pause.start && pause.end){
       const pStart = tsToMins(pause.start);
       const pEnd = tsToMins(pause.end);
-      if(baseMins >= pStart && baseMins < pEnd){
-        baseline = Math.max(pEnd, baseMins+15);
+      if(baseline >= pStart && baseline < pEnd){
+        baseline = pEnd;
       }
     }
 
@@ -1447,8 +1447,13 @@ function spCalc(){
   const fmt = ld('snsFormat',{header:'',footer:'',sold:'　完🎉'});
   const soldMark = fmt.sold||'　完🎉';
 
-  // 受付可能（完売でない・受付終了でない）
-  const activeLines = cands.filter(c=>c.mx>0&&!soldOut[c.id]).map(c=>{
+  // SNS用: 現在時刻で計算した結果でmx>0を判定（baseMinsと切り離す）
+  const nowCands = computeShortest(nowBusinessMins());
+  const nowMxMap = {};
+  nowCands.forEach(c=>{ nowMxMap[c.id]=c.mx; });
+
+  // 受付可能（現在時刻基準でmx>0 かつ 手動完売でない）
+  const activeLines = cands.filter(c=>nowMxMap[c.id]>0&&!soldOut[c.id]).map(c=>{
     return padName(sanName(c.name),6)+minsToSnsDisplay(c.start)+'～';
   });
   // 完売セラピスト（出勤中で完売設定あり）
