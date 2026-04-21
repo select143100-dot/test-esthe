@@ -279,6 +279,7 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
     <button class="nb" onclick="showPage('therapist',this)">セラピスト一覧</button>
     <button class="nb" id="nav-menu" onclick="showPage('menuMgr',this)">メニュー管理</button>
     <button class="nb" id="nav-sales" onclick="showPage('sales',this)">売上</button>
+    <button class="nb" id="nav-report" onclick="showPage('report',this)">レポート</button>
     <button class="nb" id="nav-store" onclick="showPage('storeSetting',this)">店舗設定</button>
     <button class="nb" id="nav-accounts" onclick="showPage('accounts',this)">アカウント</button>
   </div>
@@ -296,6 +297,8 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
           <button class="sp-btn" onclick="spNow()">現在時刻</button>
           <button class="sp-btn-gold" onclick="fetchAll().then(()=>spCalc())">再計算</button>
         </div>
+        <!-- 日付タブ -->
+        <div style="display:flex;gap:5px;margin-bottom:10px;overflow-x:auto" id="spDateTabs"></div>
 
         <!-- 追加条件 -->
         <div style="margin-bottom:10px">
@@ -524,11 +527,41 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
       <div class="sales-sec">内勤別 成約本数</div>
       <div id="s-staff"></div>
 
-      <!-- ログボタン -->
-      <button class="btn btn-o" style="width:100%;margin-top:8px;opacity:.5;cursor:not-allowed" disabled>
-        ログ表示（準備中）
-      </button>
+      <!-- レポート -->
+      <div class="divider"></div>
+      <div class="sales-sec">レポート</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ts);cursor:pointer">
+          <input type="checkbox" id="rep-typeA" style="accent-color:var(--gold);width:15px;height:15px" checked onchange="renderReport()"> Type A（全予約）
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ts);cursor:pointer">
+          <input type="checkbox" id="rep-typeB" style="accent-color:var(--gold);width:15px;height:15px" onchange="renderReport()"> Type B（自分の予約）
+        </label>
+        <button class="btn btn-g btn-sm" style="margin-left:auto" onclick="copyReport()">生成してコピー</button>
+      </div>
+      <div id="repOut" style="background:var(--dark3);border:1px solid var(--bdr);border-radius:var(--r);padding:12px;font-size:13px;color:var(--ts);white-space:pre-wrap;line-height:2;min-height:60px">—</div>
 
+    </div>
+
+  <!-- レポートページ（スタッフ向け） -->
+    <div class="page hidden" id="page-report">
+      <div class="rb" style="margin-bottom:14px">
+        <div class="row" style="gap:8px">
+          <input type="date" id="repDate" class="inp-sm" style="width:auto" onchange="renderReportPage()">
+          <span id="repDayLabel" style="font-size:13px;color:var(--ts);font-weight:500"></span>
+        </div>
+        <button class="btn btn-o btn-sm" onclick="document.getElementById('repDate').value=getToday();renderReportPage()">今日</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap">
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ts);cursor:pointer">
+          <input type="checkbox" id="rep2-typeA" style="accent-color:var(--gold);width:15px;height:15px" checked onchange="renderReportPage()"> Type A（全予約）
+        </label>
+        <label style="display:flex;align-items:center;gap:5px;font-size:13px;color:var(--ts);cursor:pointer">
+          <input type="checkbox" id="rep2-typeB" style="accent-color:var(--gold);width:15px;height:15px" onchange="renderReportPage()"> Type B（自分の予約）
+        </label>
+        <button class="btn btn-g btn-sm" style="margin-left:auto" onclick="copyReportPage()">生成してコピー</button>
+      </div>
+      <div id="repOut2" style="background:var(--dark3);border:1px solid var(--bdr);border-radius:var(--r);padding:12px;font-size:13px;color:var(--ts);white-space:pre-wrap;line-height:2;min-height:60px">—</div>
     </div>
 
   <!-- 店舗設定 -->
@@ -1027,6 +1060,9 @@ function applyRole(){
     const el=document.getElementById(id);
     if(el) el.classList.toggle('hidden', r==='staff');
   });
+  // レポートタブ: staffのみ表示、管理者以上は非表示（売上タブ内に統合）
+  const repNav=document.getElementById('nav-report');
+  if(repNav) repNav.classList.toggle('hidden', r!=='staff');
 }
 
 const isStaff=()=>CUR&&CUR.role==='staff';
@@ -1044,6 +1080,8 @@ function renderDash(){
   const d=new Date();
   document.getElementById('dashDate').textContent=
     `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`;
+  spDate = getToday(); // 今日にリセット
+  renderSpDateTabs();
   renderPauseList();
   spCalc();
 }
@@ -1066,7 +1104,7 @@ function _savePauseData(){
 }
 
 function renderPauseList(){
-  const att = ld('attendance',[]);
+  const att = ld('attendance',[]).filter(a=>a.date===getToday());
   const therapists = ld('therapists',[]);
   const present = therapists.filter(t=>att.find(a=>a.therapistId===t.id));
   const wrap = document.getElementById('pauseList');
@@ -1206,9 +1244,9 @@ function openSoldModal(){
   checkSoldOutReset();
   const today = getToday();
   soldOutDate = today;
-  const att = ld('attendance',[]);
+  const att = ld('attendance',[]).filter(a=>a.date===today);
   const therapists = ld('therapists',[]);
-  // 出勤中のセラピストのみ表示
+  // 当日出勤中のセラピストのみ表示
   const present = therapists.filter(t=>att.find(a=>a.therapistId===t.id));
   const fmt = ld('snsFormat',{sold:'　完🎉'});
   const soldMark = fmt.sold||'　完🎉';
@@ -1255,9 +1293,43 @@ function buildAreaFilterBtns(){
   ).join('');
 }
 
+// ── 最短取得 日付選択 ──
+let spDate = ''; // 選択中の日付（空=今日）
+
+function renderSpDateTabs(){
+  const opts = getAttDateOptions(); // 出勤登録と同じ4日分
+  if(!spDate) spDate = opts[0].date;
+  const wrap = document.getElementById('spDateTabs');
+  if(!wrap) return;
+  wrap.innerHTML = opts.map(o=>{
+    const active = o.date === spDate;
+    return `<button onclick="selectSpDate('${o.date}')" style="
+      padding:5px 10px;border-radius:var(--r);border:1px solid ${active?'var(--gold)':'var(--bdr)'};
+      background:${active?'var(--gold)':'var(--dark3)'};color:${active?'#1A1A1A':'var(--ts)'};
+      font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all .15s
+    ">${o.label}</button>`;
+  }).join('');
+  // 現在時刻ボタンは今日のみ有効
+  const nowBtn = document.getElementById('spNowBtn');
+  if(nowBtn) nowBtn.style.opacity = spDate===opts[0].date ? '1' : '0.4';
+}
+
+function selectSpDate(date){
+  spDate = date;
+  renderSpDateTabs();
+  const opts = getAttDateOptions();
+  if(date === opts[0].date){
+    spNow(); // 今日なら現在時刻にリセット
+  } else {
+    document.getElementById('spTime').value = '00:00';
+    spCalc();
+  }
+}
+
 function spNow(){
+  const opts = getAttDateOptions();
+  if(spDate && spDate !== opts[0].date) return; // 先日付では無効
   const mins=nowBusinessMins();
-  // 5分刻みに切り上げ（13:03→13:05、13:00→13:00）
   const ceiled = Math.ceil(mins/5)*5;
   document.getElementById('spTime').value=minsToDisplay(ceiled);
   spCalc();
@@ -1272,10 +1344,11 @@ function parseSpTime(str){
   return h*60+m;
 }
 
-function computeShortest(baseMins){
+function computeShortest(baseMins, targetDate){
+  if(!targetDate) targetDate = getToday();
   const therapists=ld('therapists',[]);
-  const attendance=ld('attendance',[]).filter(a=>a.date===getToday());
-  const bookings=ld('bookings',[]).filter(b=>b.date===getToday()&&b.status!=='cancel');
+  const attendance=ld('attendance',[]).filter(a=>a.date===targetDate);
+  const bookings=ld('bookings',[]).filter(b=>b.date===targetDate&&b.status!=='cancel');
   const results=[];
 
   for(const t of therapists){
@@ -1411,7 +1484,9 @@ function spCalc(){
   const raw=document.getElementById('spTime')?.value||'';
   const base=parseSpTime(raw);
   if(base===null)return;
-  const cands=computeShortest(base);
+  const targetDate = spDate || getToday();
+  const isToday = targetDate === getToday();
+  const cands=computeShortest(base, targetDate);
   const tbody=document.getElementById('spTbody');
 
   if(!cands.length){
@@ -1421,13 +1496,13 @@ function spCalc(){
   }
 
   tbody.innerHTML=cands.map(c=>{
-    // mx<=0になったら自動完売ON
-    if(c.mx<=0 && !soldOut[c.id]){
+    // 現在時刻基準かつmx<=0になったら自動完売ON（先日付検索では発動しない）
+    if(isToday && c.mx<=0 && !soldOut[c.id]){
       soldOut[c.id] = true;
       _saveSoldOut();
     }
-    // 手動完売設定されていたら受付終了扱い
-    const closed = c.mx<=0 || soldOut[c.id];
+    // 手動完売設定されていたら受付終了扱い（先日付では完売判定しない）
+    const closed = c.mx<=0 || (isToday && soldOut[c.id]);
     const stStr=closed?'—':minsToDisplay(c.start);
     const mxStr=closed?'本日受付終了':mxTxt(c.mx);
     if(closed){
@@ -1444,33 +1519,38 @@ function spCalc(){
     </tr>`;
   }).join('');
 
-  // SNSテキスト（ヘッダー・フッター・完売対応）
-  checkSoldOutReset();
-  const fmt = ld('snsFormat',{header:'',footer:'',sold:'　完🎉'});
-  const soldMark = fmt.sold||'　完🎉';
+  // SNSテキスト（今日のみ表示）
+  const snsWrap = document.querySelector('.sp-sns-wrap');
+  if(snsWrap) snsWrap.style.display = isToday ? '' : 'none';
 
-  // SNS用: 現在時刻で計算した結果でmx>0を判定（baseMinsと切り離す）
-  const nowCands = computeShortest(nowBusinessMins());
-  const nowMxMap = {};
-  nowCands.forEach(c=>{ nowMxMap[c.id]=c.mx; });
+  if(isToday){
+    checkSoldOutReset();
+    const fmt = ld('snsFormat',{header:'',footer:'',sold:'　完🎉'});
+    const soldMark = fmt.sold||'　完🎉';
 
-  // 受付可能（現在時刻基準でmx>0 かつ 手動完売でない）
-  const activeLines = cands.filter(c=>nowMxMap[c.id]>0&&!soldOut[c.id]).map(c=>{
-    return padName(sanName(c.name),6)+minsToSnsDisplay(c.start)+'～';
-  });
-  // 完売セラピスト（出勤中で完売設定あり）
-  const att = ld('attendance',[]);
-  const therapists = ld('therapists',[]);
-  const soldLines = therapists
-    .filter(t=>soldOut[t.id]&&att.find(a=>a.therapistId===t.id))
-    .map(t=>padName(sanName(t.name),6)+soldMark);
+    // SNS用: 現在時刻で計算した結果でmx>0を判定（baseMinsと切り離す）
+    const nowCands = computeShortest(nowBusinessMins(), getToday());
+    const nowMxMap = {};
+    nowCands.forEach(c=>{ nowMxMap[c.id]=c.mx; });
 
-  const allLines = [...activeLines, ...soldLines];
-  const parts=[];
-  if(fmt.header) parts.push(fmt.header);
-  parts.push(allLines.length?allLines.join('\n'):'（受付可能なセラピストがいません）');
-  if(fmt.footer) parts.push(fmt.footer);
-  document.getElementById('spSns').textContent=parts.join('\n\n');
+    // 受付可能（現在時刻基準でmx>0 かつ 手動完売でない）
+    const activeLines = cands.filter(c=>nowMxMap[c.id]>0&&!soldOut[c.id]).map(c=>{
+      return padName(sanName(c.name),6)+minsToSnsDisplay(c.start)+'～';
+    });
+    // 完売セラピスト（当日出勤中で完売設定あり）
+    const att = ld('attendance',[]).filter(a=>a.date===getToday());
+    const therapists = ld('therapists',[]);
+    const soldLines = therapists
+      .filter(t=>soldOut[t.id]&&att.find(a=>a.therapistId===t.id))
+      .map(t=>padName(sanName(t.name),6)+soldMark);
+
+    const allLines = [...activeLines, ...soldLines];
+    const parts=[];
+    if(fmt.header) parts.push(fmt.header);
+    parts.push(allLines.length?allLines.join('\n'):'（受付可能なセラピストがいません）');
+    if(fmt.footer) parts.push(fmt.footer);
+    document.getElementById('spSns').textContent=parts.join('\n\n');
+  }
 }
 
 function spOpenBk(therapistId, startMins, maxCourse){
@@ -1598,11 +1678,12 @@ function renderAttDateTabs(){
 function selectAttDate(date){
   attSelectedDate = date;
   renderAttDateTabs();
-  // 選択日の既存出勤データをロード
   const att = ld('attendance',[]).filter(a=>a.date===date);
   attSelected = {};
+  attOrder = [];
   att.forEach(a=>{
     attSelected[String(a.therapistId)] = {start:a.start, end:a.end, areaId:a.areaId||null};
+    attOrder.push(String(a.therapistId));
   });
   document.getElementById('attSearch').value='';
   document.getElementById('attSuggest').style.display='none';
@@ -1611,13 +1692,14 @@ function selectAttDate(date){
 
 function openAtt(){
   const opts = getAttDateOptions();
-  attSelectedDate = opts[0].date; // 開くたびに今日にリセット
+  attSelectedDate = opts[0].date;
   renderAttDateTabs();
-  // 今日の出勤データをロード
   const att = ld('attendance',[]).filter(a=>a.date===attSelectedDate);
   attSelected = {};
+  attOrder = [];
   att.forEach(a=>{
     attSelected[String(a.therapistId)] = {start:a.start, end:a.end, areaId:a.areaId||null};
+    attOrder.push(String(a.therapistId));
   });
   document.getElementById('attSearch').value='';
   document.getElementById('attSuggest').style.display='none';
@@ -1626,6 +1708,7 @@ function openAtt(){
 
 function clearAR(id){
   delete attSelected[String(id)];
+  attOrder = attOrder.filter(x=>x!==String(id));
   renderAttCards();
 }
 
@@ -1634,7 +1717,7 @@ async function saveAtt(){
   const therapists = ld('therapists',[]);
   const targetDate = attSelectedDate || getToday();
   const rows = [];
-  const ids = Object.keys(attSelected);
+  const ids = attOrder.filter(id=>attSelected[id]);
   for(const idStr of ids){
     const tid = parseInt(idStr);
     const sEl = document.getElementById('as-'+tid);
@@ -1656,11 +1739,6 @@ async function saveAtt(){
   if(rows.length) await sb.from('attendance').insert(rows);
   await fetchAll();
   hideLoad();
-  // アコーディオンを閉じる
-  const body = document.getElementById('accord-att');
-  const arrow = document.getElementById('accord-att-arrow');
-  if(body) body.classList.add('hidden');
-  if(arrow) arrow.textContent = '▶';
   spCalc();
   renderTherapists();
   renderPauseList();
@@ -1823,7 +1901,7 @@ function renderBookingPage(){
   if(ydEl) ydEl.textContent = '（'+youbi+'）';
 
   // 選択日の出勤者のみフィルターボタンに表示
-  const att = ld('attendance',[]);
+  const att = ld('attendance',[]).filter(a=>a.date===selDate);
   const therapists = ld('therapists',[]);
   const presentIds = new Set(att.map(a=>a.therapistId));
   // 当日なら出勤者のみ、それ以外は全員
@@ -1909,7 +1987,7 @@ function bkCardHTML(bk){
 function updateTherapistSelect(){
   const date = document.getElementById('bk-date').value || getToday();
   const bizToday = getToday();
-  const att = ld('attendance',[]);
+  const att = ld('attendance',[]).filter(a=>a.date===date);
   const therapists = ld('therapists',[]);
 
   let available;
@@ -1928,7 +2006,11 @@ function updateTherapistSelect(){
       available = present.filter(t=>!unavailableIds.has(t.id));
     }
   } else {
-    available = therapists;
+    // 先日付: その日の出勤登録があれば出勤者のみ、なければ全員
+    const presentIds = new Set(att.map(a=>Number(a.therapistId)));
+    available = presentIds.size > 0
+      ? therapists.filter(t=>presentIds.has(Number(t.id)))
+      : therapists;
   }
 
   const sel = document.getElementById('bk-therapist');
@@ -2042,6 +2124,15 @@ function openNewBk(){
   document.getElementById('op-wrap').style.display='none';
   document.getElementById('bk-disc').value='0';
   document.getElementById('bk-disc').readOnly=true;
+  document.getElementById('bk-purge-btn').classList.add('hidden');
+  // 製作者メニュー
+  const devWrap = document.getElementById('dev-bk-wrap');
+  if(isDev()){
+    devWrap.classList.remove('hidden');
+    buildCreatedBySelect(null);
+  } else {
+    devWrap.classList.add('hidden');
+  }
   openM('newBk');
   calcBkTotal();
 }
@@ -2111,6 +2202,16 @@ function openEditBk(id){
     document.getElementById('bk-del-btn').classList.add('hidden');
   } else {
     document.getElementById('bk-del-btn').classList.remove('hidden');
+  }
+  // 製作者メニュー
+  const devWrap2 = document.getElementById('dev-bk-wrap');
+  if(isDev()){
+    devWrap2.classList.remove('hidden');
+    buildCreatedBySelect(bk.createdBy||null);
+    document.getElementById('bk-purge-btn').classList.remove('hidden');
+  } else {
+    devWrap2.classList.add('hidden');
+    document.getElementById('bk-purge-btn').classList.add('hidden');
   }
   calcBkEnd();
   calcBkTotal();
@@ -2236,7 +2337,7 @@ async function saveBk(){
     disc: parseInt(document.getElementById('bk-disc').value)||0,
     op: segGet('op'), total,
     memo: document.getElementById('bk-memo').value.trim(),
-    created_by: CUR.id,
+    created_by: isDev() ? (document.getElementById('bk-createdby')?.value || CUR.id) : CUR.id,
   };
 
   showLoad('予約を保存中...');
@@ -2254,13 +2355,51 @@ async function saveBk(){
   spCalc();
 }
 
+async function purgeBk(){
+  if(!isDev()){return;}
+  if(OFFLINE){alert('オフライン中は削除できません');return;}
+  const rawId = document.getElementById('bk-id').value;
+  if(!rawId)return;
+  if(!confirm('この予約を完全削除します。この操作は取り消せません。よろしいですか？'))return;
+  showLoad('削除中...');
+  // therapistIdを先に取得（削除後は取れなくなるため）
+  const bkToDelete = ld('bookings',[]).find(b=>b.id===rawId);
+  await sb.from('bookings').delete().eq('id', rawId);
+  // 該当セラピストのsoldOutを解除
+  if(bkToDelete){
+    delete soldOut[bkToDelete.therapistId];
+    _saveSoldOut();
+  }
+  await fetchAll();
+  hideLoad();
+  closeM();
+  renderBookingPage();
+  spCalc();
+}
+
+function buildCreatedBySelect(currentId){
+  const sel = document.getElementById('bk-createdby');
+  if(!sel) return;
+  const accounts = ld('accounts',[]);
+  sel.innerHTML = accounts.map(a=>
+    `<option value="${a.id}" ${a.id===currentId?'selected':''}>${a.display}（${a.role}）</option>`
+  ).join('');
+  if(!currentId) sel.value = CUR.id;
+}
+
 async function deleteBk(){
   if(OFFLINE){alert('オフライン中はキャンセルできません');return;}
   const rawId = document.getElementById('bk-id').value;
   if(!rawId)return;
   if(!confirm('この予約をキャンセルしますか？'))return;
   showLoad('処理中...');
+  const bkToCancel = ld('bookings',[]).find(b=>b.id===rawId);
   await sb.from('bookings').update({status:'cancel'}).eq('id', rawId);
+  // 該当セラピストのsoldOutを解除
+  if(bkToCancel){
+    delete soldOut[bkToCancel.therapistId];
+    _saveSoldOut();
+  }
   await fetchAll();
   hideLoad();
   closeM();
@@ -2567,10 +2706,144 @@ function renderSales(){
         <div class="sales-staff-cnt">${r.cnt}本</div>
       </div>`).join('')
     : '<div style="color:var(--tm);font-size:13px;padding:6px 0">データなし</div>';
+
+  renderReport();
+}
+
+function buildReportLine(bk){
+  // 開始〜コース(+延長)分　属性/指名　顧客名様下4桁　[割引][支払]
+  const course = bk.course || 0;
+  const ext = bk.ext > 0 ? `(+${bk.ext})` : '';
+  const timeStr = `${bk.start}〜${course}${ext}分`;
+  const attrNom = `${bk.attr||''}/${bk.nom||''}`;
+  const customer = `${bk.cname||''}様${bk.tel4||''}`;
+  const disc = bk.disc > 0 ? `[${bk.disc.toLocaleString()}割]` : '';
+  const pay = bk.payment === 'PAYPAY' ? '[PAY]' : '';
+  return `${timeStr}　${attrNom}　${customer}　${disc}${pay}`.trimEnd();
+}
+
+function renderReport(){
+  const selDate = document.getElementById('salesDate')?.value || getToday();
+  const typeA = document.getElementById('rep-typeA')?.checked;
+  const typeB = document.getElementById('rep-typeB')?.checked;
+
+  let bks = ld('bookings',[]).filter(b=>b.date===selDate && b.status!=='cancel');
+  bks.sort((a,b)=>a.start.localeCompare(b.start));
+
+  const therapists = ld('therapists',[]);
+  const lines = [];
+
+  // セラピストごとにまとめる
+  const thIds = [...new Set(bks.map(b=>b.therapistId))];
+  for(const tid of thIds){
+    const th = therapists.find(t=>t.id===tid);
+    const thName = th ? th.name : '—';
+    const thBks = bks.filter(b=>b.therapistId===tid);
+
+    const aLines = [];
+    if(typeA){
+      thBks.forEach(b=>aLines.push(buildReportLine(b)));
+    }
+    const bLines = [];
+    if(typeB){
+      // Type Bのみ: [自]なし
+      thBks.filter(b=>b.createdBy===CUR.id).forEach(b=>bLines.push(buildReportLine(b)));
+    }
+
+    const merged = [];
+    if(typeA && !typeB) merged.push(...aLines);
+    else if(!typeA && typeB) merged.push(...bLines);
+    else if(typeA && typeB){
+      // 両方ON: 全予約を表示し自分分に[自]マーク
+      thBks.forEach(b=>{
+        const isMine = b.createdBy===CUR.id;
+        merged.push((isMine?'[自]':'')+buildReportLine(b));
+      });
+    }
+
+    if(!merged.length) continue;
+    lines.push(`★${thName}`);
+    merged.forEach(l=>lines.push(l));
+    lines.push('');
+  }
+
+  const out = document.getElementById('repOut');
+  out.textContent = lines.length ? lines.join('\n').trimEnd() : '予約データがありません';
+}
+
+function copyReport(){
+  renderReport();
+  const txt = document.getElementById('repOut').textContent;
+  if(!txt || txt==='予約データがありません') return;
+  navigator.clipboard.writeText(txt).then(()=>{
+    const btn = document.querySelector('[onclick="copyReport()"]');
+    if(btn){ btn.textContent='コピーしました！'; setTimeout(()=>btn.textContent='生成してコピー',2000); }
+  });
+}
+
+// ── レポートページ（スタッフ向け）──
+function renderReportPage(){
+  const dateEl = document.getElementById('repDate');
+  if(!dateEl.value) dateEl.value = getToday();
+  const selDate = dateEl.value;
+
+  // 曜日ラベル
+  const dp = selDate.split('-');
+  const dObj = new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]));
+  const ydEl = document.getElementById('repDayLabel');
+  if(ydEl) ydEl.textContent = '（'+'日月火水木金土'[dObj.getDay()]+'）';
+
+  const typeA = document.getElementById('rep2-typeA')?.checked;
+  const typeB = document.getElementById('rep2-typeB')?.checked;
+
+  let bks = ld('bookings',[]).filter(b=>b.date===selDate && b.status!=='cancel');
+  bks.sort((a,b)=>a.start.localeCompare(b.start));
+
+  const therapists = ld('therapists',[]);
+  const lines = [];
+
+  const thIds = [...new Set(bks.map(b=>b.therapistId))];
+  for(const tid of thIds){
+    const th = therapists.find(t=>t.id===tid);
+    const thName = th ? th.name : '—';
+    const thBks = bks.filter(b=>b.therapistId===tid);
+
+    const merged = [];
+    if(typeA && !typeB){
+      thBks.forEach(b=>merged.push(buildReportLine(b)));
+    } else if(!typeA && typeB){
+      // Type Bのみ: [自]なし
+      thBks.filter(b=>b.createdBy===CUR.id).forEach(b=>merged.push(buildReportLine(b)));
+    } else if(typeA && typeB){
+      thBks.forEach(b=>{
+        const isMine = b.createdBy===CUR.id;
+        merged.push((isMine?'[自]':'')+buildReportLine(b));
+      });
+    }
+
+    if(!merged.length) continue;
+    lines.push(`★${thName}`);
+    merged.forEach(l=>lines.push(l));
+    lines.push('');
+  }
+
+  const out = document.getElementById('repOut2');
+  if(out) out.textContent = lines.length ? lines.join('\n').trimEnd() : '予約データがありません';
+}
+
+function copyReportPage(){
+  renderReportPage();
+  const txt = document.getElementById('repOut2')?.textContent;
+  if(!txt || txt==='予約データがありません') return;
+  navigator.clipboard.writeText(txt).then(()=>{
+    const btn = document.querySelector('[onclick="copyReportPage()"]');
+    if(btn){ btn.textContent='コピーしました！'; setTimeout(()=>btn.textContent='生成してコピー',2000); }
+  });
 }
 
 // ── ATTENDANCE (new flow) ──
-let attSelected = {}; // {therapistId: {start, end, areaId, areaName}}
+let attSelected = {}; // {therapistId: {start, end, areaId}}
+let attOrder = [];   // 追加順のtherapistId配列
 
 function renderAttSearch(){
   const q = document.getElementById('attSearch').value.trim().toLowerCase();
@@ -2591,10 +2864,10 @@ function renderAttSearch(){
 function attAdd(therapistId){
   if(attSelected[String(therapistId)])return;
   attSelected[String(therapistId)] = {start:'', end:'', areaId:null};
+  attOrder.push(String(therapistId));
   document.getElementById('attSearch').value='';
   document.getElementById('attSuggest').style.display='none';
   renderAttCards();
-  // 追加したカードの出勤欄にフォーカス
   setTimeout(()=>{
     const el = document.getElementById('as-'+therapistId);
     if(el) el.focus();
@@ -2605,7 +2878,7 @@ function renderAttCards(){
   const therapists = ld('therapists',[]);
   const areas = ld('areas',[]);
   const areaOpts = '<option value="">エリア未設定</option>'+areas.map(a=>`<option value="${a.id}">${a.name}</option>`).join('');
-  const ids = Object.keys(attSelected);
+  const ids = attOrder.filter(id=>attSelected[id]); // 追加順・存在するもののみ
   document.getElementById('attCount').textContent = `出勤登録: ${ids.length}人`;
   if(!ids.length){
     document.getElementById('attRows').innerHTML =
@@ -2883,6 +3156,7 @@ async function showPage(name,btn){
   if(name==='booking')renderBookingPage();
   if(name==='menuMgr')renderMenuMgr();
   if(name==='sales')renderSales();
+  if(name==='report')renderReportPage();
   if(name==='storeSetting'){renderAreaList();loadSnsFormat();}
   if(name==='accounts')renderAccounts();
 }
@@ -2975,7 +3249,15 @@ initData();
       <textarea class="bk-inp hidden" id="bk-memo" rows="2" placeholder="備考" style="resize:none;margin-top:4px;width:100%"></textarea>
     </div>
 
+    <!-- 製作者のみ表示 -->
+    <div id="dev-bk-wrap" class="hidden" style="margin-bottom:8px;padding:8px 10px;background:var(--dark3);border:1px solid #3A2060;border-radius:var(--r)">
+      <div class="bk-lbl" style="color:#9A7AE0;margin-bottom:5px">製作者メニュー</div>
+      <div class="bk-lbl">担当内勤</div>
+      <select class="bk-inp" id="bk-createdby" style="margin-bottom:6px"></select>
+    </div>
+
     <button id="bk-del-btn" class="btn btn-d hidden" style="width:100%;padding:10px;font-size:14px;margin-bottom:6px" onclick="deleteBk()">この予約をキャンセル</button>
+    <button id="bk-purge-btn" class="btn hidden" style="width:100%;padding:10px;font-size:14px;margin-bottom:6px;background:none;border:1px solid #7a2020;color:#c06060" onclick="purgeBk()">完全削除（ログなし）</button>
     <button class="btn btn-g" style="width:100%;padding:10px;font-size:14px" onclick="saveBk()">保存</button>
   
   </div>
