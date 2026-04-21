@@ -373,6 +373,8 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
           <span class="accord-arrow" id="accord-att-arrow">▶</span>
         </div>
         <div class="accord-body hidden" id="accord-att">
+          <!-- 日付タブ -->
+          <div style="display:flex;gap:5px;margin-bottom:12px;overflow-x:auto" id="attDateTabs"></div>
           <!-- 検索・追加 -->
           <div style="position:relative;margin-bottom:10px">
             <input class="inp" id="attSearch" placeholder="セラピスト名で検索して追加..." oninput="renderAttSearch()" autocomplete="off" style="margin-bottom:0">
@@ -993,10 +995,10 @@ function _loginSuccess(){
 async function _checkAttendanceReset(){
   const today = getToday();
   const att = cache.get('attendance',[]);
-  // 今日の営業日と異なる日付のデータがあれば削除
-  const stale = att.filter(a=>a.date !== today);
+  // 今日より過去の日付のみ削除（先日付は残す）
+  const stale = att.filter(a=>a.date < today);
   if(stale.length){
-    await sb.from('attendance').delete().neq('date', today);
+    await sb.from('attendance').delete().lt('date', today);
     await fetchAll();
     spCalc();
     renderTherapists();
@@ -1561,8 +1563,58 @@ function parseTI(raw){
   return v.slice(0,2)+':'+v.slice(2,4);
 }
 
+let attSelectedDate = ''; // 出勤登録で選択中の日付
+
+function getAttDateOptions(){
+  // 今日から3日後まで4日分の日付を返す
+  const dates = [];
+  const labels = ['今日','明日','明後日','3日後'];
+  for(let i=0;i<4;i++){
+    const d = new Date();
+    if(d.getHours()<7) d.setDate(d.getDate()-1); // 営業日基準
+    d.setDate(d.getDate()+i);
+    const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,'0'), day=String(d.getDate()).padStart(2,'0');
+    const youbi='日月火水木金土'[d.getDay()];
+    dates.push({date:`${y}-${m}-${day}`, label:`${labels[i]}(${youbi})`});
+  }
+  return dates;
+}
+
+function renderAttDateTabs(){
+  const opts = getAttDateOptions();
+  if(!attSelectedDate) attSelectedDate = opts[0].date;
+  const wrap = document.getElementById('attDateTabs');
+  if(!wrap) return;
+  wrap.innerHTML = opts.map(o=>{
+    const active = o.date === attSelectedDate;
+    return `<button onclick="selectAttDate('${o.date}')" style="
+      padding:5px 10px;border-radius:var(--r);border:1px solid ${active?'var(--gold)':'var(--bdr)'};
+      background:${active?'var(--gold)':'var(--dark3)'};color:${active?'#1A1A1A':'var(--ts)'};
+      font-size:12px;font-weight:500;cursor:pointer;white-space:nowrap;transition:all .15s
+    ">${o.label}</button>`;
+  }).join('');
+}
+
+function selectAttDate(date){
+  attSelectedDate = date;
+  renderAttDateTabs();
+  // 選択日の既存出勤データをロード
+  const att = ld('attendance',[]).filter(a=>a.date===date);
+  attSelected = {};
+  att.forEach(a=>{
+    attSelected[String(a.therapistId)] = {start:a.start, end:a.end, areaId:a.areaId||null};
+  });
+  document.getElementById('attSearch').value='';
+  document.getElementById('attSuggest').style.display='none';
+  renderAttCards();
+}
+
 function openAtt(){
-  const att = ld('attendance',[]);
+  const opts = getAttDateOptions();
+  attSelectedDate = opts[0].date; // 開くたびに今日にリセット
+  renderAttDateTabs();
+  // 今日の出勤データをロード
+  const att = ld('attendance',[]).filter(a=>a.date===attSelectedDate);
   attSelected = {};
   att.forEach(a=>{
     attSelected[String(a.therapistId)] = {start:a.start, end:a.end, areaId:a.areaId||null};
@@ -1580,7 +1632,7 @@ function clearAR(id){
 async function saveAtt(){
   if(OFFLINE){alert('オフライン中は出勤登録できません');return;}
   const therapists = ld('therapists',[]);
-  const today = getToday();
+  const targetDate = attSelectedDate || getToday();
   const rows = [];
   const ids = Object.keys(attSelected);
   for(const idStr of ids){
@@ -1596,11 +1648,11 @@ async function saveAtt(){
     if(!start&&!end)continue;
     if(!start||!end){alert((t?.name||idStr)+': 開始・終了の両方を入力してください');return;}
     const areaId = aEl?.value ? parseInt(aEl.value) : null;
-    rows.push({therapist_id:tid, date:today, start, end, area_id:areaId});
+    rows.push({therapist_id:tid, date:targetDate, start, end, area_id:areaId});
   }
   showLoad('出勤登録中...');
-  // 全出勤データを削除して当日分を再挿入
-  await sb.from('attendance').delete().gte('id', 0);
+  // 選択日付のみ削除して再挿入
+  await sb.from('attendance').delete().eq('date', targetDate);
   if(rows.length) await sb.from('attendance').insert(rows);
   await fetchAll();
   hideLoad();
