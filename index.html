@@ -1274,7 +1274,7 @@ function parseSpTime(str){
 
 function computeShortest(baseMins){
   const therapists=ld('therapists',[]);
-  const attendance=ld('attendance',[]);
+  const attendance=ld('attendance',[]).filter(a=>a.date===getToday());
   const bookings=ld('bookings',[]).filter(b=>b.date===getToday()&&b.status!=='cancel');
   const results=[];
 
@@ -1668,7 +1668,7 @@ async function saveAtt(){
 
 // ── THERAPISTS ──
 function renderTherapists(){
-  const att=ld('attendance',[]);
+  const att=ld('attendance',[]).filter(a=>a.date===getToday());
   const query=(document.getElementById('thSearch')?.value||'').trim();
   const therapists=ld('therapists',[]).filter(t=>!query||t.name.includes(query));
   document.getElementById('thList').innerHTML=therapists.map(t=>{
