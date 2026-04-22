@@ -410,7 +410,7 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
           <input type="date" id="bkDateFilter" class="inp-sm" style="width:auto" onchange="renderBookingPage()">
           <span id="bkDateYoubi" style="font-size:13px;color:var(--ts);font-weight:500"></span>
         </div>
-        <button class="btn btn-g btn-sm" onclick="openNewBk()">＋ 予約追加</button>
+        <button class="btn btn-g btn-sm" onclick="openNewBk(document.getElementById('bkDateFilter').value||getToday())">＋ 予約追加</button>
       </div>
       <!-- 絞り込み行 -->
       <div class="row" style="gap:8px;margin-bottom:10px;flex-wrap:wrap">
@@ -1563,8 +1563,8 @@ function spOpenBk(therapistId, startMins, maxCourse){
   // 開始時間を文字列に（深夜表記対応）
   const startStr = minsToDisplay(startMins);
 
-  // 予約追加モーダルを開く
-  openNewBk();
+  // 予約追加モーダルを開く（最短タブの選択日付をデフォルトに）
+  openNewBk(spDate || getToday());
 
   // セラピスト・開始時間・コースを自動セット
   const thSel = document.getElementById('bk-therapist');
@@ -1953,6 +1953,9 @@ function bkCardHTML(bk){
   const th = ld('therapists',[]).find(t=>t.id===bk.therapistId);
   const thName = th ? th.name : '—';
   const cancelled = bk.status==='cancel';
+  // スタッフかつ過去日付は読み取り専用
+  const isPast = bk.date < getToday();
+  const readOnly = isStaff() && isPast;
   const tags = [
     bk.attr ? bk.attr : '',
     bk.nom ? bk.nom : '',
@@ -1960,7 +1963,7 @@ function bkCardHTML(bk){
     bk.op ? 'OP:'+bk.op : '',
   ].filter(Boolean).map(t=>`<span class="bk-tag">${t}</span>`).join('');
   const total = bk.total ? '¥'+Number(bk.total).toLocaleString() : '';
-  return `<div class="bk-card${cancelled?' bk-cancelled':''}" onclick="${cancelled?'':''}" style="${cancelled?'opacity:.55;':''}">
+  return `<div class="bk-card${cancelled?' bk-cancelled':''}" style="${cancelled?'opacity:.55;':''}">
     <div class="bk-row1">
       <span class="bk-time" style="${cancelled?'text-decoration:line-through;color:var(--tm)':''}">${bk.start}〜${bk.end}</span>
       <span class="bk-name">${bk.cname||'—'}${bk.tel4?' ('+bk.tel4+')':''}</span>
@@ -1977,7 +1980,9 @@ function bkCardHTML(bk){
         ${cancelled
           ? `<span class="bk-tag" style="background:#2D1010;color:#C85A5A">キャンセル</span>
              <button class="btn btn-o btn-sm" onclick="restoreBk('${bk.id}')" style="font-size:11px;padding:3px 8px">再予約</button>`
-          : `<button class="btn btn-o btn-sm" onclick="openEditBk('${bk.id}')" style="font-size:11px;padding:3px 8px">編集</button>`
+          : readOnly
+            ? `<button class="btn btn-o btn-sm" onclick="openEditBk('${bk.id}')" style="font-size:11px;padding:3px 8px;opacity:.6">閲覧</button>`
+            : `<button class="btn btn-o btn-sm" onclick="openEditBk('${bk.id}')" style="font-size:11px;padding:3px 8px">編集</button>`
         }
       </div>
     </div>
@@ -2095,11 +2100,15 @@ function segSet(group, val){
   });
 }
 
-function openNewBk(){
+function openNewBk(defaultDate){
   document.getElementById('bkModalTitle').textContent='予約追加';
   document.getElementById('bk-id').value='';
   document.getElementById('bk-del-btn').classList.add('hidden');
-  document.getElementById('bk-date').value=getToday();
+  document.getElementById('bk-date').value = defaultDate || getToday();
+  // 全入力要素の読み取り専用を解除（新規は常に編集可能）
+  const bkWrap = document.getElementById('m-newBk-wrap');
+  bkWrap.querySelectorAll('input,select,textarea').forEach(el=>{ el.disabled=false; });
+  bkWrap.querySelectorAll('button').forEach(el=>{ el.disabled=false; el.style.opacity=''; el.style.pointerEvents=''; });
   updateTherapistSelect();
   ['bk-start','bk-cname','bk-tel4','bk-memo'].forEach(i=>document.getElementById(i).value='');
   document.getElementById('bk-end-disp').textContent='--:--';
@@ -2197,6 +2206,20 @@ function openEditBk(id){
   }
   document.getElementById('op-wrap').style.display='';
   openM('newBk');
+  // スタッフかつ過去日付は読み取り専用
+  const isPast = bk.date < getToday();
+  const readOnly = isStaff() && isPast;
+  // 全入力要素を読み取り専用に
+  const bkWrap = document.getElementById('m-newBk-wrap');
+  bkWrap.querySelectorAll('input,select,textarea').forEach(el=>{
+    el.disabled = readOnly;
+  });
+  bkWrap.querySelectorAll('button:not([onclick="closeM()"])').forEach(el=>{
+    el.disabled = readOnly;
+    el.style.opacity = readOnly ? '0.4' : '';
+    el.style.pointerEvents = readOnly ? 'none' : '';
+  });
+  document.getElementById('bkModalTitle').textContent = readOnly ? '予約閲覧（変更不可）' : '予約編集';
   // openM後にボタン表示制御（openM内のhidden付け直しの後に実行）
   if(bk.status==='cancel'){
     document.getElementById('bk-del-btn').classList.add('hidden');
@@ -2306,8 +2329,8 @@ async function saveBk(){
   const rawId = document.getElementById('bk-id').value;
   const bkDate = document.getElementById('bk-date').value||getToday();
 
-  if(isStaff()&&bkDate!==getToday()){
-    alert('内勤スタッフは当日の予約のみ操作できます');return;
+  if(isStaff() && bkDate < getToday()){
+    alert('内勤スタッフは過去の予約を変更できません');return;
   }
 
   // 重複チェック
