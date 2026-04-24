@@ -417,6 +417,7 @@ select.bk-inp option{background:var(--dark3);color:var(--tp)}
         <select class="inp-sm" id="thFilterBtns" style="flex:1;min-width:100px" onchange="setBkFilter(this.value)"></select>
         <select class="inp-sm" id="statusFilter" style="flex:1;min-width:100px" onchange="renderBookingPage()">
           <option value="active">成約</option>
+          <option value="pending">未処理</option>
           <option value="cancel">キャンセル</option>
           <option value="all">全件</option>
         </select>
@@ -803,7 +804,7 @@ function rowToJs(tbl, row){
   if(!row) return row;
   if(tbl==='therapists') return {id:row.id,name:row.name,rank:row.rank,face:row.face,body:row.body,kan:row.kan,caution:row.caution,interval:row.interval,nomFee:row.nom_fee,memo:row.memo};
   if(tbl==='attendance') return {id:row.id,therapistId:row.therapist_id,date:row.date,start:row.start,end:row.end,areaId:row.area_id};
-  if(tbl==='bookings') return {id:row.id,date:row.date,therapistId:row.therapist_id,start:row.start,end:row.end_time,course:row.course,ext:row.ext,cname:row.cname,tel4:row.tel4,attr:row.attr,nom:row.nom,payment:row.payment,disc:row.disc,op:row.op,total:row.total,memo:row.memo,status:row.status,createdBy:row.created_by};
+  if(tbl==='bookings') return {id:row.id,date:row.date,therapistId:row.therapist_id,start:row.start,end:row.end_time,course:row.course,ext:row.ext,cname:row.cname,tel4:row.tel4,attr:row.attr,nom:row.nom,payment:row.payment,disc:row.disc,op:row.op,total:row.total,memo:row.memo,status:row.status,createdBy:row.created_by,createdAt:row.created_at||null};
   if(tbl==='menu_course'||tbl==='menuCourse') return {id:row.id,label:row.label,mins:row.mins,price:row.price};
   if(tbl==='menu_ext'||tbl==='menuExt') return {id:row.id,label:row.label,mins:row.mins,price:row.price};
   if(tbl==='menu_op'||tbl==='menuOp') return {id:row.id,label:row.label,price:row.price};
@@ -818,7 +819,7 @@ function rowToJs(tbl, row){
 function jsToRow(tbl, obj){
   if(tbl==='therapists') return {id:obj.id,name:obj.name,rank:obj.rank||'ノーマル',face:obj.face||'',body:obj.body||'',kan:obj.kan||'',caution:obj.caution||'',interval:obj.interval||20,nom_fee:obj.nomFee||0,memo:obj.memo||''};
   if(tbl==='attendance') return {therapist_id:obj.therapistId,date:obj.date,start:obj.start,end:obj.end,area_id:obj.areaId||null};
-  if(tbl==='bookings') return {id:obj.id,date:obj.date,therapist_id:obj.therapistId,start:obj.start,end_time:obj.end,course:obj.course,ext:obj.ext||0,cname:obj.cname||'',tel4:obj.tel4||'',attr:obj.attr||'',nom:obj.nom||'',payment:obj.payment||'現金',disc:obj.disc||0,op:obj.op||'',total:obj.total||0,memo:obj.memo||'',status:obj.status||'active',created_by:obj.createdBy||''};
+  if(tbl==='bookings') return {id:obj.id,date:obj.date,therapist_id:obj.therapistId,start:obj.start,end_time:obj.end,course:obj.course,ext:obj.ext||0,cname:obj.cname||'',tel4:obj.tel4||'',attr:obj.attr||'',nom:obj.nom||'',payment:obj.payment||'現金',disc:obj.disc||0,op:obj.op||'',total:obj.total||0,memo:obj.memo||'',status:obj.status||'active',created_by:obj.createdBy||'',created_at:obj.createdAt||null};
   if(tbl==='menu_course') return {label:obj.label,mins:obj.mins,price:obj.price,sort_order:obj.sort_order||0};
   if(tbl==='menu_ext') return {label:obj.label,mins:obj.mins,price:obj.price,sort_order:obj.sort_order||0};
   if(tbl==='menu_op') return {label:obj.label,price:obj.price};
@@ -1012,13 +1013,14 @@ function _saveSessionIfChecked(){
     localStorage.removeItem('luxe_session');
   }
 }
-function _loginSuccess(){
+async function _loginSuccess(){
   document.getElementById('screen-login').classList.add('hidden');
   const sm=document.getElementById('screen-main');sm.classList.remove('hidden');sm.style.display='flex';
   applyRole();
   _checkAttendanceReset();
   _loadSoldOut();
   _loadPauseData();
+  await _loadPendingChecks();
   renderAll();
   spNow();
   showPage('dash', document.querySelector('.nb'));
@@ -1900,16 +1902,26 @@ function renderBookingPage(){
   const ydEl = document.getElementById('bkDateYoubi');
   if(ydEl) ydEl.textContent = '（'+youbi+'）';
 
+  // ステータスフィルター
+  const statusF = document.getElementById('statusFilter')?.value||'active';
+
+  // 未処理タブは日付フィルター非表示・セラピストフィルター非表示
+  const isPendingView = statusF === 'pending';
+  document.getElementById('bkDateFilter').closest('.rb').style.display = isPendingView ? 'none' : '';
+
+  if(isPendingView){
+    renderPendingList();
+    return;
+  }
+
   // 選択日の出勤者のみフィルターボタンに表示
   const att = ld('attendance',[]).filter(a=>a.date===selDate);
   const therapists = ld('therapists',[]);
   const presentIds = new Set(att.map(a=>a.therapistId));
-  // 当日なら出勤者のみ、それ以外は全員
   const visibleTh = selDate === bizToday
     ? therapists.filter(t=>presentIds.has(t.id))
     : therapists;
 
-  // 選択中フィルターが非表示セラピストなら全員にリセット
   if(bkThFilter!=='all' && !visibleTh.find(t=>t.id===bkThFilter)){
     bkThFilter='all';
   }
@@ -1919,9 +1931,6 @@ function renderBookingPage(){
     `<option value="all">全員</option>`
     + visibleTh.map(t=>`<option value="${t.id}">${t.name}</option>`).join('');
   fb.value = bkThFilter==='all' ? 'all' : String(bkThFilter);
-
-  // ステータスフィルター
-  const statusF = document.getElementById('statusFilter')?.value||'active';
 
   // 選択日の予約を取得
   const allBks = ld('bookings',[]).filter(b=>b.date===selDate);
@@ -1944,10 +1953,125 @@ function renderBookingPage(){
     : '<div style="color:var(--tm);font-size:13px;padding:10px 0">予約がありません</div>';
 }
 
-function setBkFilter(id){
-  bkThFilter = id==='all' ? 'all' : parseInt(id);
-  renderBookingPage();
+// ── 未処理管理 ──
+// {bkId: {female:bool, customer:bool, price:bool}} Supabase settingsで共有
+let pendingChecks = {}; // {bkId: {female, customer, price}}
+let pendingDate = '';   // 最後に保存した営業日（リセット判定用）
+
+async function _loadPendingChecks(){
+  try {
+    const {data} = await sb.from('settings').select('value').eq('key','pending_checks').single();
+    if(data){
+      const parsed = JSON.parse(data.value);
+      // 営業日が変わっていたらリセット
+      if(parsed.date !== getToday()){
+        pendingChecks = {};
+        pendingDate = getToday();
+        await _savePendingChecks();
+      } else {
+        pendingChecks = parsed.data || {};
+        pendingDate = parsed.date;
+      }
+    } else {
+      pendingChecks = {};
+      pendingDate = getToday();
+    }
+  } catch { pendingChecks = {}; pendingDate = getToday(); }
 }
+
+async function _savePendingChecks(){
+  const val = JSON.stringify({date: getToday(), data: pendingChecks});
+  const {data} = await sb.from('settings').select('key').eq('key','pending_checks').single().catch(()=>({data:null}));
+  if(data){
+    await sb.from('settings').update({value:val}).eq('key','pending_checks');
+  } else {
+    await sb.from('settings').insert({key:'pending_checks', value:val});
+  }
+}
+
+async function togglePendingCheck(bkId, type){
+  if(!pendingChecks[bkId]) pendingChecks[bkId] = {female:false, customer:false, price:false};
+  pendingChecks[bkId][type] = !pendingChecks[bkId][type];
+  // 3つ全部チェックされたら完了→リストから消す
+  const c = pendingChecks[bkId];
+  await _savePendingChecks();
+  renderPendingList();
+}
+
+function isPendingDone(bkId){
+  const c = pendingChecks[bkId];
+  return c && c.female && c.customer && c.price;
+}
+
+function renderPendingList(){
+  const bizToday = getToday();
+  // created_atが今日の営業日の予約（かつcreated_atがnullでない・キャンセルでない）
+  const allBks = ld('bookings',[]).filter(b=>{
+    if(!b.createdAt) return false;
+    if(b.status==='cancel') return false;
+    // created_atの営業日を判定（7時基準）
+    const d = new Date(b.createdAt);
+    const h = d.getHours();
+    if(h < 7) d.setDate(d.getDate()-1);
+    const y = d.getFullYear(), m = String(d.getMonth()+1).padStart(2,'0'), day = String(d.getDate()).padStart(2,'0');
+    return `${y}-${m}-${day}` === bizToday;
+  });
+
+  // 未完了のみ表示
+  const pending = allBks.filter(b=>!isPendingDone(b.id));
+
+  // ソート: 当日予約→先日付予約、それぞれ開始時間順
+  const todayBks = pending.filter(b=>b.date===bizToday).sort((a,b)=>tsToMins(a.start)-tsToMins(b.start));
+  const futureBks = pending.filter(b=>b.date!==bizToday).sort((a,b)=>{
+    if(a.date!==b.date) return a.date.localeCompare(b.date);
+    return tsToMins(a.start)-tsToMins(b.start);
+  });
+  const sorted = [...todayBks, ...futureBks];
+
+  const therapists = ld('therapists',[]);
+
+  document.getElementById('bkList').innerHTML = sorted.length
+    ? sorted.map(bk=>{
+        const th = therapists.find(t=>t.id===bk.therapistId);
+        const thName = th ? th.name : '—';
+        const isOtherDay = bk.date !== bizToday;
+        const chk = pendingChecks[bk.id] || {female:false, customer:false, price:false};
+        const ext = bk.ext > 0 ? `(+${bk.ext})` : '';
+        const disc = bk.disc > 0 ? `(${Number(bk.disc).toLocaleString()}引)` : '';
+        const total = bk.total ? `¥${Number(bk.total).toLocaleString()}${disc}` : '';
+
+        // 別日ヘッダー
+        const dp = bk.date.split('-');
+        const dObj = new Date(parseInt(dp[0]),parseInt(dp[1])-1,parseInt(dp[2]));
+        const youbi = '日月火水木金土'[dObj.getDay()];
+        const dateHeader = isOtherDay
+          ? `<div style="background:linear-gradient(90deg,#3A2060,#2A1840);border-radius:var(--r) var(--r) 0 0;padding:5px 10px;font-size:12px;color:var(--gold);font-weight:600">🗓 ${parseInt(dp[1])}/${parseInt(dp[2])}(${youbi})</div>`
+          : '';
+        const cardRadius = isOtherDay ? '0 0 var(--r) var(--r)' : 'var(--r)';
+
+        return `${dateHeader}<div class="bk-card" style="border-radius:${cardRadius};${isOtherDay?'border-top:none;':''}" >
+          <div class="bk-row1">
+            <span class="bk-time">${bk.start}〜　${bk.course}${ext}分　${bk.attr||''}/${bk.nom||''}</span>
+            <span style="font-size:12px;color:var(--ts);margin-left:auto">${thName}</span>
+          </div>
+          <div style="font-size:13px;color:var(--tp);margin:3px 0">${bk.cname||'—'}様${bk.tel4||''}　${total}</div>
+          <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;color:${chk.female?'var(--gold)':'var(--ts)'}">
+              <input type="checkbox" ${chk.female?'checked':''} onchange="togglePendingCheck('${bk.id}','female')" style="accent-color:var(--gold)"> 女性連絡
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;color:${chk.customer?'var(--gold)':'var(--ts)'}">
+              <input type="checkbox" ${chk.customer?'checked':''} onchange="togglePendingCheck('${bk.id}','customer')" style="accent-color:var(--gold)"> 顧客連絡
+            </label>
+            <label style="display:flex;align-items:center;gap:5px;cursor:pointer;font-size:13px;color:${chk.price?'var(--gold)':'var(--ts)'}">
+              <input type="checkbox" ${chk.price?'checked':''} onchange="togglePendingCheck('${bk.id}','price')" style="accent-color:var(--gold)"> 料金確認
+            </label>
+          </div>
+        </div>`;
+      }).join('')
+    : '<div style="color:var(--tm);font-size:13px;padding:10px 0">未処理の予約はありません</div>';
+}
+
+function setBkFilter(v){ bkThFilter = v==='all'?'all':parseInt(v); renderBookingPage(); }
 
 function bkCardHTML(bk){
   const th = ld('therapists',[]).find(t=>t.id===bk.therapistId);
@@ -2367,6 +2491,7 @@ async function saveBk(){
   if(!rawId){
     bkData.id = 'bk_'+Date.now();
     bkData.status = 'active';
+    bkData.createdAt = new Date().toISOString();
     await sb.from('bookings').insert([bkData]);
   } else {
     await sb.from('bookings').update(bkData).eq('id', rawId);
