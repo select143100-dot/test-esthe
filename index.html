@@ -2498,11 +2498,16 @@ async function saveBk(){
   await fetchAll();
   hideLoad();
   closeM();
+  if(!rawId){
+    // 新規追加後は未処理タブへ飛ぶ
+    const sf = document.getElementById('statusFilter');
+    if(sf) sf.value = 'pending';
+    const bkNavBtn = document.querySelector('.nb[onclick*="booking"]');
+    showPage('booking', bkNavBtn);
+  }
   renderBookingPage();
   spCalc();
 }
-
-async function purgeBk(){
   if(!isDev()){return;}
   if(OFFLINE){alert('オフライン中は削除できません');return;}
   const rawId = document.getElementById('bk-id').value;
