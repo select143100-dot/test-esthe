@@ -1992,10 +1992,9 @@ async function _savePendingChecks(){
 async function togglePendingCheck(bkId, type){
   if(!pendingChecks[bkId]) pendingChecks[bkId] = {female:false, customer:false, price:false};
   pendingChecks[bkId][type] = !pendingChecks[bkId][type];
-  // 3つ全部チェックされたら完了→リストから消す
-  const c = pendingChecks[bkId];
-  await _savePendingChecks();
+  // 即時再描画（保存は非同期で並行して行う）
   renderPendingList();
+  _savePendingChecks(); // awaitしない
 }
 
 function isPendingDone(bkId){
