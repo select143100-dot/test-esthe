@@ -2487,19 +2487,20 @@ async function saveBk(){
   };
 
   showLoad('予約を保存中...');
-  if(!rawId){
+  const isNew = !rawId;
+  if(isNew){
     bkData.id = 'bk_'+Date.now();
     bkData.status = 'active';
-    bkData.createdAt = new Date().toISOString();
-    await sb.from('bookings').insert([bkData]);
+    bkData.created_at = new Date().toISOString();
+    const {createdAt, ...insertData} = bkData;
+    await sb.from('bookings').insert([insertData]);
   } else {
     await sb.from('bookings').update(bkData).eq('id', rawId);
   }
   await fetchAll();
   hideLoad();
   closeM();
-  if(!rawId){
-    // 新規追加後は未処理タブへ飛ぶ
+  if(isNew){
     const sf = document.getElementById('statusFilter');
     if(sf) sf.value = 'pending';
     const bkNavBtn = document.querySelector('.nb[onclick*="booking"]');
@@ -2508,6 +2509,8 @@ async function saveBk(){
   renderBookingPage();
   spCalc();
 }
+
+async function purgeBk(){
   if(!isDev()){return;}
   if(OFFLINE){alert('オフライン中は削除できません');return;}
   const rawId = document.getElementById('bk-id').value;
