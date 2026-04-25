@@ -1169,6 +1169,12 @@ function tsToMins(ts){
   if(parts.length<2)return 0;
   return parseInt(parts[0])*60+parseInt(parts[1]);
 }
+// 深夜またぎ補正版: bStartより小さい（翌日時刻）場合は+24h
+function tsToMinsNight(ts, bStart){
+  const m = tsToMins(ts);
+  if(bStart !== undefined && m < bStart) return m + 24*60;
+  return m;
+}
 
 // ── SHORTEST FILTER ──
 const spFilter = {area:null, face:null, body:null, kan:null};
@@ -1375,7 +1381,7 @@ function computeShortest(baseMins, targetDate){
       .map(b=>{
         const menu=ld('menuCourse',[]).find(m=>m.mins===b.course);
         const dur=(menu?menu.mins:b.course||60)+(parseInt(b.ext)||0);
-        const st=tsToMins(b.start);
+        const st=tsToMinsNight(b.start, bStart); // 深夜補正
         return{start:st,end:st+dur};
       })
       .sort((a,b)=>a.start-b.start);
@@ -1502,12 +1508,19 @@ function spCalc(){
   const nowMxMap = {};
   nowCands.forEach(c=>{ nowMxMap[c.id]=c.mx; });
 
+  // 完売ON処理をレンダリング前にまとめて実行（map内での非同期呼び出しを避ける）
+  let soldOutChanged = false;
+  if(isToday){
+    cands.forEach(c=>{
+      if(nowMxMap[c.id]<=0 && !soldOut[c.id]){
+        soldOut[c.id] = true;
+        soldOutChanged = true;
+      }
+    });
+    if(soldOutChanged) _saveSoldOut();
+  }
+
   tbody.innerHTML=cands.map(c=>{
-    // 現在時刻基準でmx<=0になったら自動完売ON（先日付・任意時刻検索では発動しない）
-    if(isToday && nowMxMap[c.id]<=0 && !soldOut[c.id]){
-      soldOut[c.id] = true;
-      _saveSoldOut();
-    }
     // closed判定も現在時刻基準（先日付では完売判定しない）
     const closed = isToday ? (nowMxMap[c.id]<=0 || soldOut[c.id]) : c.mx<=0;
     const stStr=closed?'—':minsToDisplay(c.start);
@@ -1940,7 +1953,7 @@ function renderBookingPage(){
   const filtered = bkThFilter==='all'
     ? bookings
     : bookings.filter(b=>b.therapistId===bkThFilter);
-  filtered.sort((a,b)=>tsToMins(a.start)-tsToMins(b.start));
+  filtered.sort((a,b)=>tsToMinsNight(a.start,7*60)-tsToMinsNight(b.start,7*60)); // 7:00基準で深夜補正
 
   // バッジは営業日当日の予約数
   const todayBks = ld('bookings',[]).filter(b=>b.date===bizToday&&b.status!=='cancel');
@@ -2018,10 +2031,10 @@ function renderPendingList(){
   const pending = allBks.filter(b=>!isPendingDone(b.id));
 
   // ソート: 当日予約→先日付予約、それぞれ開始時間順
-  const todayBks = pending.filter(b=>b.date===bizToday).sort((a,b)=>tsToMins(a.start)-tsToMins(b.start));
+  const todayBks = pending.filter(b=>b.date===bizToday).sort((a,b)=>tsToMinsNight(a.start,7*60)-tsToMinsNight(b.start,7*60));
   const futureBks = pending.filter(b=>b.date!==bizToday).sort((a,b)=>{
     if(a.date!==b.date) return a.date.localeCompare(b.date);
-    return tsToMins(a.start)-tsToMins(b.start);
+    return tsToMinsNight(a.start,7*60)-tsToMinsNight(b.start,7*60);
   });
   const sorted = [...todayBks, ...futureBks];
 
@@ -2390,7 +2403,7 @@ function calcBkEnd(){
   const course = parseInt(segGet('course'))||0;
   const ext = parseInt(segGet('ext'))||0;
   if(!start||!course){document.getElementById('bk-end-disp').textContent='--:--';return;}
-  const startM = tsToMins(start);
+  const startM = tsToMinsNight(start, 7*60); // 深夜補正
   const endM = startM + course + ext;
   document.getElementById('bk-end-disp').textContent = minsToDisplay(endM);
 }
@@ -2477,7 +2490,7 @@ async function saveBk(){
   }
 
   const ext = parseInt(segGet('ext'))||0;
-  const startM = tsToMins(start);
+  const startM = tsToMinsNight(start, 7*60); // 深夜補正
   const endM = startM + course + ext;
   const end = minsToDisplay(endM);
   const total = calcBkTotal()||0;
