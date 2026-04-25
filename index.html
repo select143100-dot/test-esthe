@@ -2457,9 +2457,24 @@ async function saveBk(){
   const therapistId = parseInt(document.getElementById('bk-therapist').value)||0;
   const start = document.getElementById('bk-start').value;
   const course = parseInt(segGet('course'))||0;
-  if(!therapistId){alert('セラピストを選択してください');return;}
-  if(!start){alert('開始時間を入力してください');return;}
-  if(!course){alert('コースを選択してください');return;}
+  const cname = document.getElementById('bk-cname').value.trim();
+  const tel4  = document.getElementById('bk-tel4').value.trim();
+  const attr  = segGet('attr');
+  const nom   = segGet('nom');
+
+  // マスト入力チェック（まとめてアラート）
+  const missing = [];
+  if(!therapistId) missing.push('・セラピスト');
+  if(!start)       missing.push('・開始時間');
+  if(!course)      missing.push('・コース');
+  if(!cname)       missing.push('・顧客名');
+  if(!tel4)        missing.push('・下4桁');
+  if(!attr)        missing.push('・属性');
+  if(!nom)         missing.push('・指名');
+  if(missing.length){
+    alert('以下の項目を入力してください：\n' + missing.join('\n'));
+    return;
+  }
 
   const ext = parseInt(segGet('ext'))||0;
   const startM = tsToMins(start);
@@ -2493,9 +2508,7 @@ async function saveBk(){
   const bkData = {
     date: bkDate, therapist_id: therapistId, start, end_time: end,
     course, ext,
-    cname: document.getElementById('bk-cname').value.trim(),
-    tel4: document.getElementById('bk-tel4').value.trim(),
-    attr: segGet('attr'), nom: segGet('nom'),
+    cname, tel4, attr, nom,
     payment: getPayment(),
     disc: parseInt(document.getElementById('bk-disc').value)||0,
     op: segGet('op'), total,
