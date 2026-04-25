@@ -1578,11 +1578,9 @@ function spOpenBk(therapistId, startMins, maxCourse){
     startEl.value = startStr;
     calcBkEnd();
   }
-  if(bestCourse){
-    segSet('course', String(bestCourse.mins));
-    calcBkEnd();
-    calcBkTotal();
-  }
+  // コースはデフォルト未選択（手動選択）
+  calcBkEnd();
+  calcBkTotal();
 }
 
 // ── バックグラウンドポーリング（120秒ごと） ──
@@ -3412,11 +3410,18 @@ initData();
         <div class="bk-lbl">OP</div>
         <div class="seg-wrap" id="seg-op" style="margin-bottom:0"></div>
       </div>
-      <div>
-        <div class="bk-lbl" style="color:var(--ts)">OP抜き</div>
-        <div class="bk-disp" id="bk-total-noop" style="color:var(--ts);font-weight:500;font-size:13px">¥0</div>
-        <div class="bk-lbl" style="margin-top:4px">OP込み総額</div>
-        <div class="bk-disp" id="bk-total-disp" style="color:var(--gold);font-weight:600">¥0</div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <div style="display:flex;gap:6px;align-items:baseline">
+          <div>
+            <div class="bk-lbl" style="color:var(--ts)">OP抜き</div>
+            <div class="bk-disp" id="bk-total-noop" style="color:var(--ts);font-weight:500;font-size:13px">¥0</div>
+          </div>
+          <div style="color:var(--tm);font-size:11px;padding-bottom:2px">→</div>
+          <div>
+            <div class="bk-lbl">OP込み</div>
+            <div class="bk-disp" id="bk-total-disp" style="color:var(--gold);font-weight:600">¥0</div>
+          </div>
+        </div>
       </div>
     </div>
 
