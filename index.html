@@ -1477,6 +1477,7 @@ function padName(text, width){
 
 // SNS表示用: 24時以上は-24して0:xx表記に変換
 function minsToSnsDisplay(mins){
+  if(mins===null||mins===undefined||isNaN(mins)) return '';
   if(mins >= 24*60) mins -= 24*60;
   const h = Math.floor(mins/60);
   const m = mins % 60;
@@ -1498,26 +1499,9 @@ function spCalc(){
     return;
   }
 
-  // 現在時刻基準のmxを別途計算（closed判定・SNS用）
-  const nowCands = isToday ? computeShortest(nowBusinessMins(), getToday()) : [];
-  const nowMxMap = {};
-  nowCands.forEach(c=>{ nowMxMap[c.id]=c.mx; });
-
-  // 完売ON処理をレンダリング前にまとめて実行
-  let soldOutChanged = false;
-  if(isToday){
-    cands.forEach(c=>{
-      if(nowMxMap[c.id]<=0 && !soldOut[c.id]){
-        soldOut[c.id] = true;
-        soldOutChanged = true;
-      }
-    });
-    if(soldOutChanged) _saveSoldOut();
-  }
-
   tbody.innerHTML=cands.map(c=>{
-    // closed判定も現在時刻基準（先日付では完売判定しない）
-    const closed = isToday ? (nowMxMap[c.id]<=0 || soldOut[c.id]) : c.mx<=0;
+    // closed判定: 今日は手動完売のみ。先日付はmx<=0で判定
+    const closed = isToday ? !!soldOut[c.id] : c.mx<=0;
     const stStr=closed?'—':minsToDisplay(c.start);
     const mxStr=closed?'本日受付終了':mxTxt(c.mx);
     if(closed){
@@ -1544,7 +1528,7 @@ function spCalc(){
     const soldMark = fmt.sold||'　完🎉';
 
     // nowMxMapは上で計算済み
-    const activeLines = cands.filter(c=>nowMxMap[c.id]>0&&!soldOut[c.id]).map(c=>{
+    const activeLines = cands.filter(c=>c.mx>0&&!soldOut[c.id]&&c.start!==null).map(c=>{
       return padName(sanName(c.name),6)+minsToSnsDisplay(c.start)+'～';
     });
     // 完売セラピスト（当日出勤中で完売設定あり）
@@ -2136,7 +2120,7 @@ function updateTherapistSelect(){
       // 新規時は受付不可・完売済みを除外
       const nowMins = nowBusinessMins();
       const cands = computeShortest(nowMins);
-      const unavailableIds = new Set(cands.filter(c=>c.mx<=0||soldOut[c.id]).map(c=>c.id));
+      const unavailableIds = new Set(cands.filter(c=>soldOut[c.id]).map(c=>c.id));
       available = present.filter(t=>!unavailableIds.has(t.id));
     }
   } else {
