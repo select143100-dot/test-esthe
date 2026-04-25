@@ -1441,7 +1441,7 @@ function computeShortest(baseMins, targetDate){
       found={start:gS,mx};
       break;
     }
-    results.push({id:t.id,name:t.name,start:found?found.start:null,mx:found?found.mx:0});
+    results.push({id:t.id,name:t.name,start:found?found.start:0,mx:found?found.mx:0});
   }
 
   return results.sort((a,b)=>{
