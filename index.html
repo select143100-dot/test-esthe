@@ -1160,6 +1160,7 @@ function nowBusinessMins(){
 }
 function minsToDisplay(mins){
   // 分→表示文字列（深夜またぎ対応）
+  if(mins===null||mins===undefined||isNaN(mins)) return '--:--';
   let h=Math.floor(mins/60),m=mins%60;
   return `${String(h).padStart(2,'0')}:${String(m).padStart(2,'0')}`;
 }
@@ -1502,12 +1503,19 @@ function spCalc(){
   const nowMxMap = {};
   nowCands.forEach(c=>{ nowMxMap[c.id]=c.mx; });
 
+  // 完売ON処理をレンダリング前にまとめて実行
+  let soldOutChanged = false;
+  if(isToday){
+    cands.forEach(c=>{
+      if(nowMxMap[c.id]<=0 && !soldOut[c.id]){
+        soldOut[c.id] = true;
+        soldOutChanged = true;
+      }
+    });
+    if(soldOutChanged) _saveSoldOut();
+  }
+
   tbody.innerHTML=cands.map(c=>{
-    // 現在時刻基準でmx<=0になったら自動完売ON（先日付・任意時刻検索では発動しない）
-    if(isToday && nowMxMap[c.id]<=0 && !soldOut[c.id]){
-      soldOut[c.id] = true;
-      _saveSoldOut();
-    }
     // closed判定も現在時刻基準（先日付では完売判定しない）
     const closed = isToday ? (nowMxMap[c.id]<=0 || soldOut[c.id]) : c.mx<=0;
     const stStr=closed?'—':minsToDisplay(c.start);
@@ -2268,7 +2276,7 @@ function openNewBk(defaultDate){
   ['course','attr','nom'].forEach(g=>segReset(g));
   segReset('op');
   segSet('op','有');
-  segReset('ext'); // 延長: 非表示・0にリセット
+  segReset('ext');
   setPayment('現金');
   document.getElementById('op-wrap').style.display='none';
   document.getElementById('bk-disc').value='0';
@@ -2416,10 +2424,8 @@ function calcBkTotal(){
 
   // 延長料金: 単価(20分あたり) × 延長分数/20
   if(extMins>0){
-    const extItem = ld('menuExt',[]).find(e=>e.mins===20); // 20分単価
-    if(extItem){
-      base += extItem.price * (extMins/20);
-    }
+    const extItem = ld('menuExt',[]).find(e=>e.mins===20);
+    if(extItem) base += extItem.price * (extMins/20);
   }
 
   // 指名料
@@ -2464,13 +2470,13 @@ async function saveBk(){
 
   // マスト入力チェック（まとめてアラート）
   const missing = [];
-  if(!therapistId) missing.push('・セラピスト');
-  if(!start)       missing.push('・開始時間');
-  if(!course)      missing.push('・コース');
-  if(!cname)       missing.push('・顧客名');
-  if(!tel4)        missing.push('・下4桁');
-  if(!attr)        missing.push('・属性');
-  if(!nom)         missing.push('・指名');
+  if(!therapistId) missing.push('．．．セラピスト');
+  if(!start)       missing.push('．．．開始時間');
+  if(!course)      missing.push('．．．コース');
+  if(!cname)       missing.push('．．．顧客名');
+  if(!tel4)        missing.push('．．．下4桁');
+  if(!attr)        missing.push('．．．属性');
+  if(!nom)         missing.push('．．．指名');
   if(missing.length){
     alert('以下の項目を入力してください：\n' + missing.join('\n'));
     return;
@@ -2598,7 +2604,13 @@ async function cancelBk(id){
   if(OFFLINE){alert('オフライン中はキャンセルできません');return;}
   if(!confirm('この予約をキャンセルしますか？'))return;
   showLoad('処理中...');
+  const bkToCancel = ld('bookings',[]).find(b=>b.id===id);
   await sb.from('bookings').update({status:'cancel'}).eq('id', id);
+  // 該当セラピストのsoldOutを解除
+  if(bkToCancel){
+    delete soldOut[bkToCancel.therapistId];
+    _saveSoldOut();
+  }
   await fetchAll();
   hideLoad();
   renderBookingPage();
