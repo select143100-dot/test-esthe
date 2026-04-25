@@ -2180,21 +2180,6 @@ function toggleMemo(){
   btn.textContent = hidden ? '▼ メモ' : '▶ メモ';
 }
 
-function toggleExtMore(){
-  const more = document.getElementById('ext-more');
-  const btn = document.getElementById('ext-more-btn');
-  if(!more)return;
-  const visible = more.style.display !== 'none';
-  more.style.display = visible ? 'none' : 'contents';
-  btn.textContent = visible ? '…' : '▲';
-}
-function resetExtMore(){
-  const more = document.getElementById('ext-more');
-  const btn = document.getElementById('ext-more-btn');
-  if(more) more.style.display = 'none';
-  if(btn){ btn.textContent = '…'; }
-}
-
 function segSelect(group, val){
   const wrap = document.getElementById('seg-'+group);
   if(!wrap)return;
@@ -2205,22 +2190,56 @@ function segSelect(group, val){
   calcBkTotal();
 }
 function segGet(group){
+  if(group==='ext'){
+    const sel=document.getElementById('bk-ext-sel');
+    return sel ? sel.value : '0';
+  }
   const wrap = document.getElementById('seg-'+group);
   if(!wrap)return '';
   const active = wrap.querySelector('.seg-btn.active');
   return active ? active.dataset.val : '';
 }
 function segReset(group){
+  if(group==='ext'){
+    const sel=document.getElementById('bk-ext-sel');
+    if(sel) sel.value='0';
+    hideExtRow();
+    return;
+  }
   const wrap = document.getElementById('seg-'+group);
   if(!wrap)return;
   wrap.querySelectorAll('.seg-btn').forEach(b=>b.classList.remove('active'));
 }
 function segSet(group, val){
+  if(group==='ext'){
+    const sel=document.getElementById('bk-ext-sel');
+    if(sel){
+      sel.value=String(val||0);
+      const mins=parseInt(val)||0;
+      if(mins>0){ showExtRow(); } else { hideExtRow(); }
+    }
+    return;
+  }
   const wrap = document.getElementById('seg-'+group);
   if(!wrap)return;
   wrap.querySelectorAll('.seg-btn').forEach(b=>{
     b.classList.toggle('active', b.dataset.val===String(val));
   });
+}
+function showExtRow(){
+  document.getElementById('ext-row').style.display='';
+  document.getElementById('ext-add-btn').style.display='none';
+  calcBkEnd(); calcBkTotal();
+}
+function hideExtRow(){
+  const sel=document.getElementById('bk-ext-sel');
+  if(sel) sel.value='0';
+  document.getElementById('ext-row').style.display='none';
+  document.getElementById('ext-add-btn').style.display='';
+  calcBkEnd(); calcBkTotal();
+}
+function onExtSelChange(){
+  calcBkEnd(); calcBkTotal();
 }
 
 function openNewBk(defaultDate){
@@ -2241,17 +2260,17 @@ function openNewBk(defaultDate){
   if(memoEl){memoEl.classList.add('hidden');memoEl.value='';}
   if(memoBtn)memoBtn.textContent='▶ メモ';
   document.getElementById('bk-total-disp').textContent='¥0';
+  document.getElementById('bk-total-noop').textContent='¥0';
   // まずボタン再生成
   rebuildCourseButtons();
   rebuildExtButtons();
   rebuildDiscButtons();
   rebuildAttrNomButtons();
-  // 生成後にリセット・初期値セット
+  // 生成後にリセット・初期値セット（コースはデフォルト未選択）
   ['course','attr','nom'].forEach(g=>segReset(g));
   segReset('op');
   segSet('op','有');
-  segSet('ext','0');
-  resetExtMore();
+  segReset('ext'); // 延長: 非表示・0にリセット
   setPayment('現金');
   document.getElementById('op-wrap').style.display='none';
   document.getElementById('bk-disc').value='0';
@@ -2301,13 +2320,7 @@ function openEditBk(id){
   // 生成後に値をセット
   segReset('course'); segSet('course', String(bk.course||''));
   const extVal = parseInt(bk.ext)||0;
-  resetExtMore();
-  if(extVal>100){
-    const m=document.getElementById('ext-more');
-    const b=document.getElementById('ext-more-btn');
-    if(m)m.style.display='contents';if(b)b.textContent='▲';
-  }
-  segSet('ext', String(extVal||0));
+  segSet('ext', String(extVal));
   ['attr','nom','op'].forEach(g=>segReset(g));
   segSet('attr', bk.attr||'');
   segSet('nom', bk.nom||'');
@@ -2391,19 +2404,23 @@ function calcBkTotal(){
   const therapistId = parseInt(document.getElementById('bk-therapist').value)||0;
   const nom = segGet('nom');
 
+  const noopEl = document.getElementById('bk-total-noop');
+  const totalEl = document.getElementById('bk-total-disp');
+
   // コース料金
   const courseItem = ld('menuCourse',[]).find(c=>c.mins===courseMins);
   if(!courseItem){
-    document.getElementById('bk-total-disp').textContent='¥0';
+    if(noopEl) noopEl.textContent='¥0';
+    totalEl.textContent='¥0';
     return 0;
   }
-  let total = courseItem.price;
+  let base = courseItem.price;
 
   // 延長料金: 単価(20分あたり) × 延長分数/20
   if(extMins>0){
     const extItem = ld('menuExt',[]).find(e=>e.mins===20); // 20分単価
     if(extItem){
-      total += extItem.price * (extMins/20);
+      base += extItem.price * (extMins/20);
     }
   }
 
@@ -2413,25 +2430,27 @@ function calcBkTotal(){
     if(nomItem){
       if(nomItem.price===null){
         const therapist = ld('therapists',[]).find(t=>t.id===therapistId);
-        if(therapist) total += therapist.nomFee||0;
+        if(therapist) base += therapist.nomFee||0;
       } else {
-        total += nomItem.price;
+        base += nomItem.price;
       }
     }
   }
 
+  // 割引（OP抜き計算はここまで）
+  let noOpTotal = base - disc;
+  if(noOpTotal<0) noOpTotal=0;
+  if(noopEl) noopEl.textContent='¥'+Math.round(noOpTotal).toLocaleString();
+
   // OP料金
+  let total = noOpTotal;
   const op = segGet('op');
   if(op){
     const opItem = ld('menuOp',[]).find(o=>o.label===op);
     if(opItem) total += opItem.price||0;
   }
 
-  // 割引
-  total -= disc;
-  if(total<0)total=0;
-
-  document.getElementById('bk-total-disp').textContent = '¥'+Math.round(total).toLocaleString();
+  totalEl.textContent = '¥'+Math.round(total).toLocaleString();
   return Math.round(total);
 }
 
@@ -2697,19 +2716,11 @@ function rebuildCourseButtons(){
 }
 
 function rebuildExtButtons(){
-  const exts = ld('menuExt',[]);
-  const wrap = document.getElementById('seg-ext');
-  if(!wrap)return;
-  // なし + 登録済み(〜100) + … + 100超
-  const base = exts.filter(e=>e.mins<=100);
-  const more = exts.filter(e=>e.mins>100);
-  wrap.innerHTML =
-    `<button class="seg-btn active" data-val="0" onclick="segSelect('ext','0')">なし</button>`
-    + base.map(e=>`<button class="seg-btn" data-val="${e.mins}" onclick="segSelect('ext','${e.mins}')">${e.mins}</button>`).join('')
-    + (more.length ? `<button class="seg-btn" id="ext-more-btn" data-val="" onclick="toggleExtMore()" style="border-style:dashed">…</button>
-      <span id="ext-more" style="display:none;contents:''">
-        ${more.map(e=>`<button class="seg-btn" data-val="${e.mins}" onclick="segSelect('ext','${e.mins}')">${e.mins}</button>`).join('')}
-      </span>` : '');
+  const exts = ld('menuExt',[]).sort((a,b)=>a.mins-b.mins);
+  const sel = document.getElementById('bk-ext-sel');
+  if(!sel)return;
+  sel.innerHTML = '<option value="0">なし</option>'
+    + exts.map(e=>`<option value="${e.mins}">${e.label||e.mins+'分'}</option>`).join('');
 }
 
 function rebuildDiscButtons(){
@@ -3352,8 +3363,16 @@ initData();
     <div class="bk-lbl">コース</div>
     <div class="seg-wrap" id="seg-course" style="margin-bottom:6px"></div>
 
-    <div class="bk-lbl">延長</div>
-    <div class="seg-wrap seg-sm" id="seg-ext" style="margin-bottom:6px"></div>
+    <div id="ext-row" style="margin-bottom:6px;display:none">
+      <div class="bk-lbl">延長</div>
+      <div style="display:flex;align-items:center;gap:6px">
+        <select class="bk-inp" id="bk-ext-sel" onchange="onExtSelChange()" style="margin-bottom:0;flex:1">
+          <option value="0">なし</option>
+        </select>
+        <button onclick="hideExtRow()" style="background:none;border:none;color:var(--ts);cursor:pointer;font-size:18px;line-height:1;padding:0 4px">✕</button>
+      </div>
+    </div>
+    <button id="ext-add-btn" onclick="showExtRow()" style="background:none;border:1px dashed var(--bdr);color:var(--ts);border-radius:var(--r);font-size:12px;cursor:pointer;padding:5px 12px;margin-bottom:6px;width:100%;text-align:left">＋ 延長を追加</button>
 
     <div style="display:grid;grid-template-columns:3fr 2fr;gap:6px;margin-bottom:6px">
       <div>
@@ -3394,7 +3413,9 @@ initData();
         <div class="seg-wrap" id="seg-op" style="margin-bottom:0"></div>
       </div>
       <div>
-        <div class="bk-lbl">総額</div>
+        <div class="bk-lbl" style="color:var(--ts)">OP抜き</div>
+        <div class="bk-disp" id="bk-total-noop" style="color:var(--ts);font-weight:500;font-size:13px">¥0</div>
+        <div class="bk-lbl" style="margin-top:4px">OP込み総額</div>
         <div class="bk-disp" id="bk-total-disp" style="color:var(--gold);font-weight:600">¥0</div>
       </div>
     </div>
