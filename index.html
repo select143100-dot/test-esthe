@@ -1038,6 +1038,13 @@ async function fetchAll(){
             else soldOut={};
           } catch(e){ soldOut={}; }
         }
+        if(s.key==='luxe_pause'){
+          try{
+            const parsed=JSON.parse(s.value);
+            if(parsed.date===getToday()) pauseData=parsed.data||{};
+            else pauseData={};
+          } catch(e){ pauseData={}; }
+        }
       });
       cache.set('snsFormat',fmt);
     }
@@ -1194,7 +1201,7 @@ function _saveSessionIfChecked(){
     localStorage.removeItem('luxe_session');
   }
 }
-function _loginSuccess(){
+async function _loginSuccess(){
   document.getElementById('screen-login').classList.add('hidden');
   const sm=document.getElementById('screen-main');sm.classList.remove('hidden');sm.style.display='flex';
   applyRole();
@@ -1274,17 +1281,21 @@ function renderDash(){
 // {therapistId: {start:'HH:MM', end:'HH:MM'}} 当日のみ有効
 let pauseData = {};
 
-function _loadPauseData(){
+async function _loadPauseData(){
   try{
-    const raw = localStorage.getItem('luxe_pause');
-    if(!raw) return;
-    const {date, data} = JSON.parse(raw);
-    if(date === getToday()) pauseData = data||{};
-    else { pauseData={}; localStorage.removeItem('luxe_pause'); }
+    const {data} = await sb.from('settings').select('value').eq('key','luxe_pause').single();
+    if(!data){ pauseData={}; return; }
+    const parsed = JSON.parse(data.value);
+    if(parsed.date === getToday()){
+      pauseData = parsed.data||{};
+    } else {
+      pauseData={};
+      await sb.from('settings').delete().eq('key','luxe_pause');
+    }
   } catch(e){ pauseData={}; }
 }
-function _savePauseData(){
-  localStorage.setItem('luxe_pause', JSON.stringify({date:getToday(), data:pauseData}));
+async function _savePauseData(){
+  await sb.from('settings').upsert([{key:'luxe_pause', value:JSON.stringify({date:getToday(), data:pauseData})}]);
 }
 
 function renderPauseList(){
@@ -1317,7 +1328,7 @@ function renderPauseList(){
   }).join('');
 }
 
-function savePause(tid){
+async function savePause(tid){
   const sEl = document.getElementById('pause-s-'+tid);
   const eEl = document.getElementById('pause-e-'+tid);
   fmtTI(sEl); fmtTI(eEl);
@@ -1328,7 +1339,7 @@ function savePause(tid){
   } else {
     pauseData[tid] = {start, end};
   }
-  _savePauseData();
+  await _savePauseData();
   spCalc();
 }
 
