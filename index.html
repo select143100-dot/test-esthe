@@ -1251,15 +1251,24 @@ function openSoldModal(){
   const fmt = ld('snsFormat',{sold:'　完🎉'});
   const soldMark = fmt.sold||'　完🎉';
 
+  // 現在時刻ベースで空き枠チェック（完売未設定バッジ用）
+  const nowMxMap = {};
+  const nowCands = computeShortest(nowBusinessMins(), today);
+  nowCands.forEach(c=>{ nowMxMap[c.id]=c.mx; });
+
   document.getElementById('soldList').innerHTML = present.length
     ? present.map(t=>{
         const isSold = soldOut[t.id]||false;
+        const needsSold = !isSold && (nowMxMap[t.id]<=0);
+        const badge = needsSold
+          ? `<span style="font-size:11px;color:#E0A020;margin-left:6px">⚠ 完売未設定</span>`
+          : '';
         return `<div onclick="toggleThSold(${t.id},this)"
           style="display:flex;align-items:center;justify-content:space-between;
-          background:${isSold?'#2A1010':'var(--dark3)'};
-          border:1px solid ${isSold?'#C85A5A':'var(--bdr)'};
+          background:${isSold?'#2A1010':needsSold?'#2A1F00':'var(--dark3)'};
+          border:1px solid ${isSold?'#C85A5A':needsSold?'#C8901A':'var(--bdr)'};
           border-radius:var(--r);padding:10px 13px;margin-bottom:7px;cursor:pointer;transition:all .15s">
-          <span style="font-size:14px;font-weight:500;color:${isSold?'#C85A5A':'var(--tp)'}">${t.name}</span>
+          <span style="font-size:14px;font-weight:500;color:${isSold?'#C85A5A':'var(--tp)'}">${t.name}${badge}</span>
           <span style="font-size:13px;color:${isSold?'#C85A5A':'var(--tm)'}">
             ${isSold?soldMark:'受付中'}
           </span>
