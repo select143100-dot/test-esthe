@@ -1402,22 +1402,19 @@ function computeShortest(baseMins, targetDate){
       }
     }
 
-    // 受付停止チェック: baselineが停止時間帯にかかっていたら終了時刻に押し出す
+    // 受付停止をブロックとして組み込む（削除時はpauseDataから消えるので自動開放）
     const pause = pauseData[t.id];
-    if(pause && pause.start && pause.end){
-      const pStart = tsToMins(pause.start);
-      const pEnd = tsToMins(pause.end);
-      if(baseline >= pStart && baseline < pEnd){
-        baseline = pEnd;
-      }
-    }
+    const pauseBlock = (pause && pause.start && pause.end)
+      ? [{k:1, s:tsToMins(pause.start), e:tsToMins(pause.end)}]
+      : [];
 
-    // ギャップ探索
+    // ギャップ探索（受付停止も予約ブロックと同列に扱う）
     const blocks=[
       {k:0,s:bStart,e:bStart},
       ...tBks.map(r=>({k:1,s:r.start,e:r.end})),
+      ...pauseBlock,
       {k:0,s:bEnd,e:bEnd},
-    ];
+    ].sort((a,b)=>a.s-b.s);
     let found=null;
     for(let i=0;i<blocks.length-1;i++){
       const L=blocks[i],R=blocks[i+1];
