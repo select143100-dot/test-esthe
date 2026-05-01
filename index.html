@@ -2059,20 +2059,7 @@ function toggleMemo(){
   btn.textContent = hidden ? '▼ メモ' : '▶ メモ';
 }
 
-function toggleExtMore(){
-  const more = document.getElementById('ext-more');
-  const btn = document.getElementById('ext-more-btn');
-  if(!more)return;
-  const visible = more.style.display !== 'none';
-  more.style.display = visible ? 'none' : 'contents';
-  btn.textContent = visible ? '…' : '▲';
-}
-function resetExtMore(){
-  const more = document.getElementById('ext-more');
-  const btn = document.getElementById('ext-more-btn');
-  if(more) more.style.display = 'none';
-  if(btn){ btn.textContent = '…'; }
-}
+
 
 function segSelect(group, val){
   const wrap = document.getElementById('seg-'+group);
@@ -2125,8 +2112,8 @@ function openNewBk(){
   ['course','attr','nom'].forEach(g=>segReset(g));
   segReset('op');
   segSet('op','有');
-  segSet('ext','0');
-  resetExtMore();
+  const extSel=document.getElementById('ext-select');
+  if(extSel)extSel.value='0';
   setPayment('現金');
   document.getElementById('op-wrap').style.display='none';
   document.getElementById('bk-disc').value='0';
@@ -2176,13 +2163,8 @@ function openEditBk(id){
   // 生成後に値をセット
   segReset('course'); segSet('course', String(bk.course||''));
   const extVal = parseInt(bk.ext)||0;
-  resetExtMore();
-  if(extVal>100){
-    const m=document.getElementById('ext-more');
-    const b=document.getElementById('ext-more-btn');
-    if(m)m.style.display='contents';if(b)b.textContent='▲';
-  }
-  segSet('ext', String(extVal||0));
+  const extSel2=document.getElementById('ext-select');
+  if(extSel2)extSel2.value=String(extVal||0);
   ['attr','nom','op'].forEach(g=>segReset(g));
   segSet('attr', bk.attr||'');
   segSet('nom', bk.nom||'');
@@ -2238,7 +2220,7 @@ function getPayment(){
 function calcBkEnd(){
   const start = document.getElementById('bk-start').value;
   const course = parseInt(segGet('course'))||0;
-  const ext = parseInt(segGet('ext'))||0;
+  const ext = parseInt(document.getElementById('ext-select')?.value)||0;
   if(!start||!course){document.getElementById('bk-end-disp').textContent='--:--';return;}
   const startM = tsToMins(start);
   const endM = startM + course + ext;
@@ -2247,7 +2229,7 @@ function calcBkEnd(){
 
 function calcBkTotal(){
   const courseMins = parseInt(segGet('course'))||0;
-  const extMins = parseInt(segGet('ext'))||0;
+  const extMins = parseInt(document.getElementById('ext-select')?.value)||0;
   const disc = parseInt(document.getElementById('bk-disc').value)||0;
   const therapistId = parseInt(document.getElementById('bk-therapist').value)||0;
   const nom = segGet('nom');
@@ -2292,8 +2274,19 @@ function calcBkTotal(){
   total -= disc;
   if(total<0)total=0;
 
-  document.getElementById('bk-total-disp').textContent = '¥'+Math.round(total).toLocaleString();
-  return Math.round(total);
+  const totalWithOp = Math.round(total);
+  // OP無し総額（OP料金を引いた値）
+  let opPrice = 0;
+  const op2 = segGet('op');
+  if(op2){
+    const opItem2 = ld('menuOp',[]).find(o=>o.label===op2);
+    if(opItem2) opPrice = opItem2.price||0;
+  }
+  const totalNoOp = Math.round(total - opPrice);
+  const dispEl = document.getElementById('bk-total-disp');
+  dispEl.innerHTML = '¥'+totalWithOp.toLocaleString()
+    + '<br><span style="font-size:11px;color:var(--ts)">(OP無し ¥'+totalNoOp.toLocaleString()+')</span>';
+  return totalWithOp;
 }
 
 async function saveBk(){
@@ -2305,7 +2298,7 @@ async function saveBk(){
   if(!start){alert('開始時間を入力してください');return;}
   if(!course){alert('コースを選択してください');return;}
 
-  const ext = parseInt(segGet('ext'))||0;
+  const ext = parseInt(document.getElementById('ext-select')?.value)||0;
   const startM = tsToMins(start);
   const endM = startM + course + ext;
   const end = minsToDisplay(endM);
@@ -2549,19 +2542,12 @@ function rebuildCourseButtons(){
 }
 
 function rebuildExtButtons(){
-  const exts = ld('menuExt',[]);
-  const wrap = document.getElementById('seg-ext');
-  if(!wrap)return;
-  // なし + 登録済み(〜100) + … + 100超
-  const base = exts.filter(e=>e.mins<=100);
-  const more = exts.filter(e=>e.mins>100);
-  wrap.innerHTML =
-    `<button class="seg-btn active" data-val="0" onclick="segSelect('ext','0')">なし</button>`
-    + base.map(e=>`<button class="seg-btn" data-val="${e.mins}" onclick="segSelect('ext','${e.mins}')">${e.mins}</button>`).join('')
-    + (more.length ? `<button class="seg-btn" id="ext-more-btn" data-val="" onclick="toggleExtMore()" style="border-style:dashed">…</button>
-      <span id="ext-more" style="display:none;contents:''">
-        ${more.map(e=>`<button class="seg-btn" data-val="${e.mins}" onclick="segSelect('ext','${e.mins}')">${e.mins}</button>`).join('')}
-      </span>` : '');
+  const exts = ld('menuExt',[]).slice().sort((a,b)=>a.mins-b.mins);
+  const sel = document.getElementById('ext-select');
+  if(!sel)return;
+  sel.innerHTML = `<option value="0">なし</option>`
+    + exts.map(e=>`<option value="${e.mins}">${e.mins}分</option>`).join('');
+  sel.value = '0';
 }
 
 function rebuildDiscButtons(){
@@ -3205,7 +3191,9 @@ initData();
     <div class="seg-wrap" id="seg-course" style="margin-bottom:6px"></div>
 
     <div class="bk-lbl">延長</div>
-    <div class="seg-wrap seg-sm" id="seg-ext" style="margin-bottom:6px"></div>
+    <select class="bk-inp" id="ext-select" onchange="calcBkEnd();calcBkTotal();" style="margin-bottom:6px">
+      <option value="0">なし</option>
+    </select>
 
     <div style="display:grid;grid-template-columns:3fr 2fr;gap:6px;margin-bottom:6px">
       <div>
