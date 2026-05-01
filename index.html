@@ -1405,10 +1405,10 @@ function computeShortest(baseMins, targetDate){
     // 受付停止をブロックとして組み込む（削除時はpauseDataから消えるので自動開放）
     const pause = pauseData[t.id];
     const pauseBlock = (pause && pause.start && pause.end)
-      ? [{k:1, s:tsToMins(pause.start), e:tsToMins(pause.end)}]
+      ? [{k:2, s:tsToMins(pause.start), e:tsToMins(pause.end)}]
       : [];
 
-    // ギャップ探索（受付停止も予約ブロックと同列に扱う）
+    // ギャップ探索（k:1=予約/インターバルあり, k:2=受付停止/インターバルなし, k:0=境界）
     const blocks=[
       {k:0,s:bStart,e:bStart},
       ...tBks.map(r=>({k:1,s:r.start,e:r.end})),
